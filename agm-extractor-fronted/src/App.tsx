@@ -1,0 +1,28 @@
+import { Routes, Route } from 'react-router-dom';
+import Login from './features/auth/pages/Login';
+import Dashboard from './features/extractor/pages/Dashboard';
+import { useSession } from './lib/auth-client';
+
+export default function App() {
+    const { data: session, isPending } = useSession();
+
+    if (isPending) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-blue-600 font-bold text-xl animate-pulse">
+                    Cargando Extractor...
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <Routes>
+            {!session ? (
+                <Route path="*" element={<Login />} />
+            ) : (
+                <Route path="*" element={<Dashboard />} />
+            )}
+        </Routes>
+    );
+}
