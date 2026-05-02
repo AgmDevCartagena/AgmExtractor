@@ -7,17 +7,18 @@ import { Button } from "../../../components/ui/button";
 import { X, ExternalLink, FileText, Search, AlertCircle } from "lucide-react";
 
 interface TablaResultadosProps {
-    userId: string | null;
+    userId: string | undefined;
+    taskId: string | null;
 }
 
 interface ResultadosExtraccionResponse {
     data?: ProcesoJudicial[];
 }
 
-export default function TablaResultados({ userId }: TablaResultadosProps) {
+export default function TablaResultados({ userId, taskId }: TablaResultadosProps) {
     const [page, setPage] = useState(1);
     const limit = 10;
-    const { data: rawData, isLoading, isError } = useResultadosExtraccion(userId, page, limit);
+    const { data: rawData, isLoading, isError } = useResultadosExtraccion(userId, taskId, page, limit);
     const [procesoSeleccionado, setProcesoSeleccionado] = useState<ProcesoJudicial | null>(null);
 
     const procesos: ProcesoJudicial[] = Array.isArray(rawData)
@@ -104,7 +105,7 @@ export default function TablaResultados({ userId }: TablaResultadosProps) {
                         </TableHeader>
                         <TableBody>
                             {procesos.map((proceso: ProcesoJudicial, index: number) => (
-                                <TableRow 
+                                <TableRow
                                     key={`${proceso.radicado}-${index}`}
                                     className="cursor-pointer group"
                                     onClick={() => setProcesoSeleccionado(proceso)}
@@ -138,22 +139,22 @@ export default function TablaResultados({ userId }: TablaResultadosProps) {
                         </TableBody>
                     </Table>
                 </div>
-                
+
                 {/* Pagination Footer */}
                 <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between">
                     <p className="text-xs text-slate-500 font-medium">Página {page}</p>
                     <div className="flex gap-2">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
+                        <Button
+                            variant="outline"
+                            size="sm"
                             disabled={page === 1}
                             onClick={(e) => { e.stopPropagation(); setPage(p => Math.max(1, p - 1)); }}
                             className="h-8 px-3"
                         >
                             Anterior
                         </Button>
-                        <Button 
-                            variant="outline" 
+                        <Button
+                            variant="outline"
                             size="sm"
                             disabled={procesos.length < limit}
                             onClick={(e) => { e.stopPropagation(); setPage(p => p + 1); }}
@@ -176,9 +177,9 @@ export default function TablaResultados({ userId }: TablaResultadosProps) {
                                     Radicado {procesoSeleccionado.radicado}
                                 </CardTitle>
                             </div>
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
+                            <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => setProcesoSeleccionado(null)}
                                 className="rounded-full hover:bg-slate-100"
                             >

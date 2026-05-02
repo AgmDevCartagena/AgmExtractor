@@ -18,6 +18,24 @@ export interface ProcesoJudicial {
     fechaDescubrimiento: string,
 }
 
+export interface ScheduledTask {
+    id: string;
+    parteProcesal: string;
+    juzgado: string;
+    frecuencia: FrecuenciaPermitida;
+    createdAt: string;
+}
+
+
+export interface PaginatedTasksResponse {
+    data: ScheduledTask[];
+    meta: {
+        total: number;
+        page: number;
+        last_page: number;
+    };
+}
+
 export const useProgramarTarea = () => {
     return useMutation({
         mutationFn: (nuevaTarea: ScheduleParamsDto) =>
@@ -37,11 +55,31 @@ export const useCancelarTarea = () => {
     });
 };
 
-export const useResultadosExtraccion = (userId: string | null, page = 1, limit = 10) => {
-    return useQuery<ProcesoJudicial[]>({
-        queryKey: ['resultados', userId, page, limit],
-        queryFn: () => apiFetch(`/extractor/schedule/${userId}?page=${page}&limit=${limit}`),
+export const useResultadosExtraccion = (
+    userId: string | null | undefined,
+    taskId: string | null,
+    page = 1,
+    limit = 10
+) => {
+    return useQuery<PaginatedTasksResponse>({
+        queryKey: ['resultados', userId, taskId, page, limit],
+        queryFn: () => {
+            let url = `/extractor/schedule?page=${page}&limit=${limit}`;
+            if (taskId) {
+                url += `&taskId=${taskId}`;
+            }
+            return apiFetch(url);
+        },
         enabled: !!userId,
         refetchInterval: userId ? 15000 : false,
     });
 };
+
+export const useTareasProgramadas = (userId: string | null, page = 1, limit = 10) => {
+    return useQuery<PaginatedTasksResponse>({
+        queryKey: ['tareasProgramadas', userId, page, limit],
+        queryFn: () => apiFetch(`/extractor/schedule/tasks/${userId}?page=${page}&limit=${limit}`),
+        enabled: !!userId,
+        refetchInterval: userId ? 15000 : false,
+    })
+}

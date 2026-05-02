@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signIn } from '../../../lib/auth-client';
+import { signUp } from '../../../lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Lock, Mail, Scale } from 'lucide-react';
+import { AlertCircle, Lock, Mail, Scale, User } from 'lucide-react';
 
-export default function Login() {
+export default function Register() {
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -19,14 +21,27 @@ export default function Login() {
         setIsLoading(true);
         setError('');
 
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden');
+            setIsLoading(false);
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('La contraseña debe tener al menos 6 caracteres');
+            setIsLoading(false);
+            return;
+        }
+
         try {
-            const { data, error: authError } = await signIn.email({
+            const { data, error: authError } = await signUp.email({
                 email,
                 password,
+                name,
             });
 
             if (authError) {
-                setError(authError.message || 'Credenciales incorrectas');
+                setError(authError.message || 'Error al crear la cuenta');
                 return;
             }
 
@@ -42,11 +57,10 @@ export default function Login() {
 
     return (
         <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-            {/* Visual Side */}
             <div className="hidden md:flex md:w-1/2 bg-slate-900 items-center justify-center p-12 text-white relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                   <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
-                   <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
                 </div>
                 
                 <div className="relative z-10 max-w-lg">
@@ -57,10 +71,10 @@ export default function Login() {
                         <h1 className="text-4xl font-black tracking-tighter">Extractor</h1>
                     </div>
                     <h2 className="text-5xl font-bold mb-6 leading-tight">
-                        Optimiza tu gestión jurídica con <span className="text-blue-400">inteligencia</span>.
+                        Únete a la <span className="text-blue-400">revolución</span> jurídica.
                     </h2>
                     <p className="text-slate-400 text-lg leading-relaxed">
-                        Extracción automática de procesos, seguimiento en tiempo real y análisis avanzado para profesionales del derecho.
+                        Crea tu cuenta y comienza a optimizar tu gestión legal con tecnología de última generación.
                     </p>
                 </div>
                 
@@ -70,18 +84,17 @@ export default function Login() {
                 </div>
             </div>
 
-            {/* Form Side */}
             <div className="flex-1 flex items-center justify-center p-6 md:p-12">
                 <Card className="w-full max-w-md border-none shadow-none bg-transparent md:bg-white md:border md:shadow-sm">
                     <CardHeader className="space-y-1 text-center md:text-left">
                         <div className="md:hidden flex justify-center mb-6">
-                           <div className="p-2 bg-blue-600 rounded-lg">
-                               <Scale size={24} className="text-white" />
-                           </div>
+                            <div className="p-2 bg-blue-600 rounded-lg">
+                                <Scale size={24} className="text-white" />
+                            </div>
                         </div>
-                        <CardTitle className="text-3xl font-bold tracking-tight">Bienvenido</CardTitle>
+                        <CardTitle className="text-3xl font-bold tracking-tight">Crear Cuenta</CardTitle>
                         <CardDescription>
-                            Ingresa tus credenciales para acceder al sistema.
+                            Ingresa tus datos para registrarte en el sistema.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -93,6 +106,21 @@ export default function Login() {
                         )}
 
                         <form onSubmit={handleSubmit} className="space-y-5">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                    <User size={14} className="text-slate-400" />
+                                    Nombre Completo
+                                </label>
+                                <Input
+                                    type="text"
+                                    placeholder="Juan Pérez"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                    className="bg-white"
+                                />
+                            </div>
+
                             <div className="space-y-2">
                                 <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
                                     <Mail size={14} className="text-slate-400" />
@@ -109,18 +137,30 @@ export default function Login() {
                             </div>
 
                             <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
-                                        <Lock size={14} className="text-slate-400" />
-                                        Contraseña
-                                    </label>
-                                    <a href="#" className="text-xs text-blue-600 hover:underline">¿Olvidaste tu contraseña?</a>
-                                </div>
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                    <Lock size={14} className="text-slate-400" />
+                                    Contraseña
+                                </label>
                                 <Input
                                     type="password"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="bg-white"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                    <Lock size={14} className="text-slate-400" />
+                                    Confirmar Contraseña
+                                </label>
+                                <Input
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
                                     className="bg-white"
                                 />
@@ -134,17 +174,17 @@ export default function Login() {
                                 {isLoading ? (
                                     <div className="flex items-center gap-2">
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        <span>Verificando...</span>
+                                        <span>Creando cuenta...</span>
                                     </div>
                                 ) : (
-                                    'Iniciar Sesión'
+                                    'Registrarse'
                                 )}
                             </Button>
                         </form>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-4 text-center">
                         <p className="text-sm text-slate-500">
-                            ¿No tienes una cuenta? <Link to="/register" className="text-blue-600 font-semibold hover:underline">Regístrate</Link>
+                            ¿Ya tienes una cuenta? <Link to="/login" className="text-blue-600 font-semibold hover:underline">Iniciar Sesión</Link>
                         </p>
                     </CardFooter>
                 </Card>

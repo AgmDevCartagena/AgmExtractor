@@ -1,5 +1,6 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './features/auth/pages/Login';
+import Register from './features/auth/pages/Register';
 import Dashboard from './features/extractor/pages/Dashboard';
 import { useSession } from './lib/auth-client';
 
@@ -19,7 +20,11 @@ export default function App() {
     return (
         <Routes>
             {!session ? (
-                <Route path="*" element={<Login />} />
+                <>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="*" element={<Navigate to="/login" replace />} />
+                </>
             ) : (
                 <Route path="*" element={<Dashboard />} />
             )}

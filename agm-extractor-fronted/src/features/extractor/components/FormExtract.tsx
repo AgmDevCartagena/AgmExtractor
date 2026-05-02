@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Calendar, Landmark, Send, User } from 'lucide-react';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface FormularioProps {
     onJobCreated: (jobId: string) => void;
@@ -94,6 +96,7 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
     const [frecuencia, setFrecuencia] = useState<FrecuenciaPermitida>('1d');
 
     const programarMutation = useProgramarTarea();
+    const queryClient = useQueryClient();
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,13 +109,17 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
             { parteProcesal, juzgado: juzgadoNombre, frecuencia },
             {
                 onSuccess: (data) => {
-                    if (data && data.id) {
-                        onJobCreated(data.id);
-                    }
+                    toast.success('Radar programado exitosamente');
+                    queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
+                    
+                    onJobCreated(data?.id || '');
 
                     setParteProcesal('');
                     setJuzgado('');
                     setFrecuencia('1d');
+                },
+                onError: (error) => {
+                    toast.error(error.message || 'Error al programar el radar');
                 }
             }
         );
@@ -220,13 +227,6 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
                             'Programar Búsqueda'
                         )}
                     </Button>
-
-                    {programarMutation.isError && (
-                        <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-lg flex items-start gap-2 animate-in fade-in duration-300">
-                            <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                            <span>{programarMutation.error?.message || 'Error al procesar la solicitud.'}</span>
-                        </div>
-                    )}
                 </form>
             </CardContent>
         </Card>
