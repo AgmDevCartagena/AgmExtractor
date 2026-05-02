@@ -310,15 +310,22 @@ export class ExtractorService implements OnModuleInit {
     }
 
     async getDataForScheduledTask(pagination: PaginationQueryDto, userId: string) {
-        const { limit, page } = pagination;
+        const { limit, page, taskId } = pagination;
         const effectiveLimit = (limit && limit > 0) ? limit : 10;
         const skip = ((page ?? 1) - 1) * effectiveLimit;
         try {
+            const whereClause: any = {
+                tareaProgramada: {
+                    userId
+                }
+            }
+
+            if (taskId) {
+                whereClause.tareaProgramada.id = taskId;
+            }
             const [data, total] = await this.prisma.$transaction([
                 this.prisma.procesosJudiciales.findMany({
-                    where: {
-                        tareaProgramada: { userId }
-                    },
+                    where: whereClause,
                     skip,
                     take: effectiveLimit,
                     orderBy: { createdAt: 'desc' }
@@ -330,9 +337,15 @@ export class ExtractorService implements OnModuleInit {
             ])
 
             if (!data || data.length === 0) {
-                throw new HttpException('No se encontraron datos para esta tarea programada', HttpStatus.NOT_FOUND);
+                return {
+                    data: [],
+                    meta: {
+                        total: 0,
+                        page,
+                        last_page: 0
+                    }
+                }
             }
-
             return {
                 data,
                 meta: {
@@ -345,7 +358,7 @@ export class ExtractorService implements OnModuleInit {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Error al obtener datos para la tarea programada: ${errorMessage}`);
-            throw new Error(`Fallo al obtener datos para la tarea programada: ${errorMessage}`);
+            throw new HttpException(`Fallo al obtener datos: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR)
         }
     }
 
@@ -371,4 +384,43 @@ export class ExtractorService implements OnModuleInit {
         }
     }
 
+    async getScheduledTasks(pagination: PaginationQueryDto, userId: string) {
+        if (!userId) {
+            throw new HttpException('ID de usuario es requerido', HttpStatus.BAD_REQUEST);
+        }
+        const { limit, page } = pagination;
+        const effectiveLimit = (limit && limit > 0) ? limit : 10;
+        const skip = ((page ?? 1) - 1) * effectiveLimit;
+        try {
+            const [tasks, total] = await this.prisma.$transaction([
+                this.prisma.tareaProgramada.findMany({
+                    where: { userId, activa: true },
+                    skip,
+                    take: effectiveLimit,
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        frecuencia: true,
+                        parteProcesal: true,
+                        juzgado: true,
+                        createdAt: true,
+                    }
+                }),
+                this.prisma.tareaProgramada.count({
+                    where: { userId, activa: true }
+                })
+            ]);
+            return {
+                data: tasks,
+                meta: {
+                    total,
+                    page,
+                    last_page: Math.ceil(total / effectiveLimit)
+                }
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Error al obtener tareas programadas: ${errorMessage}`);
+        }
+    }
 }

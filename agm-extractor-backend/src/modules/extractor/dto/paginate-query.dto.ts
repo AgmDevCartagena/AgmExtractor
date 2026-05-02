@@ -11,4 +11,7 @@ export class PaginationQueryDto {
     @Min(0)
     @Type(() => Number)
     page?: number = 1; 
+
+    @IsOptional()
+    taskId?: string;
 }

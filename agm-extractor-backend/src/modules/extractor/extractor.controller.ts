@@ -12,7 +12,7 @@ export class ExtractorController {
     ) { }
 
     @Post('schedule')
-    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @Throttle({ default: { limit: 10, ttl: 70000 } })
     scheduleExtraction(
         @Body() body: ScheduleParamsDto,
         @CurrentUser() user: { id: string }
@@ -21,7 +21,7 @@ export class ExtractorController {
     }
 
     @Delete('schedule/:jobId')
-    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Throttle({ default: { limit: 20, ttl: 70000 } })
     cancelScheduledExtraction(
         @Param('jobId') jobId: string,
         @CurrentUser() user: { id: string }
@@ -29,12 +29,21 @@ export class ExtractorController {
         return this.extractorService.stopScheduledExtraction(jobId, user.id);
     }
 
-    @Get('schedule/:userId')
-    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Get('schedule')
+    @Throttle({ default: { limit: 20, ttl: 70000 } })
     getDataForScheduledTask(
+        @CurrentUser() user: { id: string },
+        @Query() pagination: PaginationQueryDto,
+    ) {
+        return this.extractorService.getDataForScheduledTask(pagination, user.id);
+    }
+
+    @Get('schedule/tasks/:userId')
+    @Throttle({ default: { limit: 20, ttl: 70000 } })
+    getScheduledTasks(
         @Param('userId') userId: string,
         @Query() pagination: PaginationQueryDto
     ) {
-        return this.extractorService.getDataForScheduledTask(pagination, userId);
+        return this.extractorService.getScheduledTasks(pagination, userId);
     }
 }
