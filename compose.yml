@@ -30,7 +30,7 @@ services:
       dockerfile: Dockerfile
     container_name: agm_frontend
     ports:
-      - "3001:80"
+      - "5174:80"
     env_file:
       - ./agm-extractor-fronted/.env
     depends_on:

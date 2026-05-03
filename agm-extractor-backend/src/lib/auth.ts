@@ -13,7 +13,7 @@ export const auth = betterAuth({
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: [
-        'http://localhost:5173',
+        process.env.ALLOW_ORIGIN as string,
     ],
 
     database: prismaAdapter(prisma, {
