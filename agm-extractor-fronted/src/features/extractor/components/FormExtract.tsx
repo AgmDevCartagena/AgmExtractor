@@ -3,7 +3,7 @@ import { useProgramarTarea, type FrecuenciaPermitida } from '../hooks/useTask';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Calendar, Landmark, Send, User } from 'lucide-react';
+import { Calendar, Landmark, Send, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -111,7 +111,7 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
                 onSuccess: (data) => {
                     toast.success('Radar programado exitosamente');
                     queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
-                    
+
                     onJobCreated(data?.id || '');
 
                     setParteProcesal('');
