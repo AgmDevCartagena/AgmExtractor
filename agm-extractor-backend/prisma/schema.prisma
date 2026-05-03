@@ -19,6 +19,7 @@ model User {
   emailVerified Boolean @default(false)
   image         String?
   estado        Boolean @default(true)
+  telefono      String?
 
   tareas   TareaProgramada[]
   accounts Account[]

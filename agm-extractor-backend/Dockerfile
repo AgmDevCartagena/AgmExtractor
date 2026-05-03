@@ -35,9 +35,6 @@ COPY src ./src/
 
 RUN npm run build
 
-# Verificar que el build generó los archivos esperados
-RUN ls -la dist/src/ || (echo "ERROR: dist/src no existe" && exit 1)
-
 # ============================================================
 # Stage 3: Production — imagen final liviana
 # ============================================================
@@ -60,4 +57,4 @@ USER nodeuser
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/src/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]

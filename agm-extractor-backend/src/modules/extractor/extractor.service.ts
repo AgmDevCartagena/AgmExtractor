@@ -371,14 +371,22 @@ export class ExtractorService implements OnModuleInit {
         }
         try {
             const tarea = await this.prisma.tareaProgramada.findUnique({
-                where: { id: taskId }
+                where: { id: taskId },
+                include: { user: true }
             });
 
             if (!tarea) {
                 this.logger.warn(`No se encontró la tarea con ID ${taskId}`);
                 return;
             }
-            this.notificationsService.sendNotification(data as any, tarea)
+
+            const userPhone = tarea.user.telefono;
+            if (!userPhone) {
+                this.logger.warn(`El usuario ${tarea.userId} no tiene un número de teléfono registrado. No se enviará notificación.`);
+            }
+
+
+            this.notificationsService.sendNotification(data as any, tarea, userPhone as string)
                 .catch(err => this.logger.error('Error al notificar a n8n', err));
 
             const dataInsert = data.map(d => ({

@@ -4,17 +4,20 @@ import { signUp } from '../../../lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Lock, Mail, Scale, User } from 'lucide-react';
+import { AlertCircle, Lock, Mail, Phone, Scale, User } from 'lucide-react';
 
 export default function Register() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
+    const [countryCode, setCountryCode] = useState('+57');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const navigate = useNavigate();
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,11 +36,16 @@ export default function Register() {
             return;
         }
 
+        const cleanCountryCode = countryCode.replace('+', '');
+        const finalPhoneNumber = `${cleanCountryCode}${phone}`;
+
         try {
             const { data, error: authError } = await signUp.email({
                 email,
                 password,
                 name,
+                // @ts-expect-error: Better Auth frontend no conoce los campos adicionales del backend
+                telefono: finalPhoneNumber,
             });
 
             if (authError) {
@@ -62,7 +70,7 @@ export default function Register() {
                     <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
                     <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
                 </div>
-                
+
                 <div className="relative z-10 max-w-lg">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
@@ -77,7 +85,7 @@ export default function Register() {
                         Crea tu cuenta y comienza a optimizar tu gestión legal con tecnología de última generación.
                     </p>
                 </div>
-                
+
                 <div className="absolute bottom-12 left-12 right-12 text-slate-500 text-sm flex justify-between border-t border-slate-800 pt-8">
                     <span>© 2026 AGM Extractor</span>
                     <span>Versión 2.0.0</span>
@@ -119,6 +127,36 @@ export default function Register() {
                                     required
                                     className="bg-white"
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                    <Phone size={14} className="text-slate-400" />
+                                    Número de Teléfono
+                                </label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={countryCode}
+                                        onChange={(e) => setCountryCode(e.target.value)}
+                                        className="flex h-9 w-[100px] rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <option value="+57">+57 (COL)</option>
+                                        <option value="+1">+1 (USA)</option>
+                                        <option value="+34">+34 (ESP)</option>
+                                        <option value="+52">+52 (MEX)</option>
+                                        <option value="+54">+54 (ARG)</option>
+                                        <option value="+56">+56 (CHI)</option>
+                                        <option value="+51">+51 (PER)</option>
+                                    </select>
+                                    <Input
+                                        type="tel"
+                                        placeholder="3012345678"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                        required
+                                        className="bg-white flex-1"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-2">
@@ -166,8 +204,8 @@ export default function Register() {
                                 />
                             </div>
 
-                            <Button 
-                                type="submit" 
+                            <Button
+                                type="submit"
                                 className="w-full h-11 text-base font-semibold transition-all hover:scale-[1.01]"
                                 disabled={isLoading}
                             >

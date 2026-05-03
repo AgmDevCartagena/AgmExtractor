@@ -3,6 +3,7 @@ import { ProcesosJudiciales, TareaProgramada } from '@prisma/client';
 
 
 interface N8nWebhookPayload {
+    telefono: string;
     cantidad: number;
     juzgado: string;
     parteProcesal: string;
@@ -18,13 +19,14 @@ export class NotificationsService {
     private readonly logger = new Logger(NotificationsService.name);
     private readonly webhookUrl = process.env.N8N_WEBHOOK_URL as string;
 
-    async sendNotification(newProcess: ProcesosJudiciales[], task: TareaProgramada) {
+    async sendNotification(newProcess: ProcesosJudiciales[], task: TareaProgramada, telefonoUsuario: string) {
         if (newProcess.length === 0 || !newProcess) {
             this.logger.log('No new processes to notify.');
             return;
         }
 
         const payload: N8nWebhookPayload = {
+            telefono: telefonoUsuario,
             cantidad: newProcess.length,
             juzgado: task.juzgado,
             parteProcesal: task.parteProcesal,
