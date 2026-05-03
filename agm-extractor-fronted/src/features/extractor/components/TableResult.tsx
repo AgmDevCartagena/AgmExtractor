@@ -226,9 +226,16 @@ export default function TablaResultados({ userId, taskId }: TablaResultadosProps
                             <Button variant="outline" onClick={() => setProcesoSeleccionado(null)}>
                                 Cerrar
                             </Button>
-                            <Button className="bg-blue-600 hover:bg-blue-700">
-                                <ExternalLink size={16} className="mr-2" />
-                                Ver en SAMAI
+                            <Button className="bg-blue-600 hover:bg-blue-700" asChild>
+                                <a
+                                    href={`https://samai.consejodeestado.gov.co/Vistas/Casos/list_procesos.aspx?guid=${procesoSeleccionado.radicado}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center"
+                                >
+                                    <ExternalLink size={16} className="mr-2" />
+                                    Ver en SAMAI
+                                </a>
                             </Button>
                         </div>
                     </Card>

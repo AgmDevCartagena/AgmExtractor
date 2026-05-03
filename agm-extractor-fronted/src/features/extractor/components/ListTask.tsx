@@ -95,7 +95,7 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea }
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[500px] custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[300px] lg:max-h-[500px] custom-scrollbar">
                 {tareas.length === 0 ? (
                     <div className="py-12 px-6 text-center">
                         <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-dashed border-slate-200">
