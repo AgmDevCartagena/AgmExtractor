@@ -1,7 +1,7 @@
 services:
   database:
     image: postgres:15-alpine
-    container_name: agm_database
+    container_name: agm_database_extractor
     environment:
       - DATABASE_NAME=extractor_db
       - DATABASE_USER=postgres
@@ -16,26 +16,25 @@ services:
       context: ./agm-extractor-backend/
       dockerfile: Dockerfile
     container_name: agm_backend
-    environment:
-      - DATABASE_URL=postgres://postgres:password@database:5432/extractor_db?schema=public
-      - BETTER_AUTH_URL=http://localhost:3000
-      - BETTER_AUTH_SECRET=b86a96bc778e902bf02ceb24e6118896be54b38ab97c349af8741a337e352cc6
+    env_file:
+      - ./agm-extractor-backend/.env
     ports:
       - "3000:3000"
     depends_on:
       - database
 
 
-    # NOTE: The frontend service is commented out for now. not exist yet  
-    # frontend:
-    #   build:
-    #     context: ./agm-extractor-frontend/
-    #     dockerfile: Dockerfile
-    #   container_name: agm_frontend
-    #   ports:
-    #     - "3001:3001"
-    # depends_on:
-    #   - backend
+  frontend:
+    build:
+      context: ./agm-extractor-fronted/
+      dockerfile: Dockerfile
+    container_name: agm_frontend
+    ports:
+      - "3001:80"
+    env_file:
+      - ./agm-extractor-fronted/.env
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
