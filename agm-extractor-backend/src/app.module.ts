@@ -7,6 +7,7 @@ import { auth } from './lib/auth';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { NotificationsModule } from './modules/extractor/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
       ttl: 60000,
       limit: 10,
     }]),
+    NotificationsModule,
   ],
   controllers: [],
   providers: [

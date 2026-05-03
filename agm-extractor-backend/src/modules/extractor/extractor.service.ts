@@ -8,6 +8,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQueryDto } from './dto/paginate-query.dto';
+import { NotificationsService } from './notifications/notifications.service';
 
 
 @Injectable()
@@ -17,7 +18,8 @@ export class ExtractorService implements OnModuleInit {
 
     constructor(
         private schedulerRegistry: SchedulerRegistry,
-        private readonly prisma: PrismaService
+        private readonly prisma: PrismaService,
+        private readonly notificationsService: NotificationsService
     ) {
         if (!fs.existsSync(this.dataDirectory)) {
             fs.mkdirSync(this.dataDirectory, { recursive: true });
@@ -363,24 +365,41 @@ export class ExtractorService implements OnModuleInit {
     }
 
     private async saveDataToDatabase(data: any[], taskId: string) {
-        const dataInsert = data.map(d => ({
-            radicado: d.radicado,
-            tipoProceso: d.tipoProceso,
-            ponente: d.ponente,
-            demandante: d.demandante,
-            textoCompleto: d.textoCompleto,
-            tareaProgramadaId: taskId
-        }))
-
+        if (!data || data.length === 0) {
+            this.logger.log(`Scraper terminó. No se encontraron coincidencias hoy para la tarea ${taskId}.`);
+            return;
+        }
         try {
+            const tarea = await this.prisma.tareaProgramada.findUnique({
+                where: { id: taskId }
+            });
+
+            if (!tarea) {
+                this.logger.warn(`No se encontró la tarea con ID ${taskId}`);
+                return;
+            }
+            this.notificationsService.sendNotification(data as any, tarea)
+                .catch(err => this.logger.error('Error al notificar a n8n', err));
+
+            const dataInsert = data.map(d => ({
+                radicado: d.radicado,
+                tipoProceso: d.tipoProceso,
+                ponente: d.ponente,
+                demandante: d.demandante,
+                textoCompleto: d.textoCompleto,
+                tareaProgramadaId: taskId
+            }));
+
             const result = await this.prisma.procesosJudiciales.createMany({
                 data: dataInsert,
                 skipDuplicates: true
-            })
-            this.logger.log(`Datos guardados en la base de datos. Registros insertados: ${result.count}`);
+            });
+
+            this.logger.log(`Scraper ejecutado. Encontrados: ${data.length}. Nuevos insertados en BD: ${result.count}`);
+
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al guardar datos en la base de datos: ${errorMessage}`);
+            this.logger.error(`Error procesando los datos extraídos: ${errorMessage}`);
         }
     }
 
