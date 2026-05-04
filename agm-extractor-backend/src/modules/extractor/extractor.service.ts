@@ -45,6 +45,7 @@ export class ExtractorService implements OnModuleInit {
                 }
 
                 const nameJob = task.id;
+
                 const job = new CronJob(cronExpression, async () => {
                     this.logger.log(`Ejecutando tarea programadas`);
                     try {
@@ -82,7 +83,7 @@ export class ExtractorService implements OnModuleInit {
     }
 
     async scheduleExtraction(params: ScheduleParamsDto, userId: string) {
-        const { frecuencia, parteProcesal, juzgado } = params;
+        const { frecuencia, parteProcesal: partesProcesales, juzgado } = params;
         const cronExpression = this.translateFrecuency(frecuencia);
         if (!cronExpression) {
             throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
@@ -98,7 +99,7 @@ export class ExtractorService implements OnModuleInit {
             data: {
                 userId,
                 frecuencia,
-                parteProcesal,
+                parteProcesal: partesProcesales,
                 juzgado
             }
         })
@@ -107,7 +108,7 @@ export class ExtractorService implements OnModuleInit {
         const job = new CronJob(cronExpression, async () => {
             this.logger.log(`Ejecutando tarea programada para el usuario ${userId} con frecuencia ${frecuencia}`);
             try {
-                await this.extractData(newTask.id, parteProcesal, juzgado);
+                await this.extractData(newTask.id, partesProcesales, juzgado);
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
                 this.logger.error(`Error en tarea programada para el usuario ${userId}: ${errorMessage}`);
@@ -149,8 +150,8 @@ export class ExtractorService implements OnModuleInit {
         }
     }
 
-    async extractData(taskId: string, parteProcesal: string, juzgado: string): Promise<any[]> {
-        this.logger.log(`Iniciando extraccion para: ${parteProcesal} en ${juzgado}`);
+    async extractData(taskId: string, partesProcesales: string[], juzgado: string): Promise<any[]> {
+        this.logger.log(`Iniciando extraccion para: ${partesProcesales.join(', ')} en ${juzgado}`);
 
         const browser = await puppeteer.launch({
             headless: true,
@@ -161,96 +162,120 @@ export class ExtractorService implements OnModuleInit {
         try {
             const page = await browser.newPage();
 
+            // Navegamos a la página una sola vez antes de iterar
             await page.goto('https://samai.consejodeestado.gov.co/Vistas/Casos/procesos.aspx', {
                 waitUntil: 'networkidle2',
                 timeout: 60000
             });
 
-            await page.waitForSelector('::-p-text(Parte procesal)');
-            await page.click('::-p-text(Parte procesal)');
+            let todosLosResultados: any[] = [];
 
-            const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
-            await page.waitForSelector(inputBusqueda);
-            await page.type(inputBusqueda, parteProcesal, { delay: 30 });
+            for (const parteProcesal of partesProcesales) {
+                await page.waitForSelector('::-p-text(Parte procesal)');
+                await page.click('::-p-text(Parte procesal)');
 
-            await page.waitForSelector('::-p-text(Por corporación)');
-            await page.click('::-p-text(Por corporación)');
+                const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
+                await page.waitForSelector(inputBusqueda);
+                
+                // Limpiar el campo de búsqueda antes de ingresar la nueva palabra
+                await page.click(inputBusqueda, { clickCount: 3 });
+                await page.keyboard.press('Backspace');
 
-            const selectorDropdown = '#FW_LstCorporacion';
-            await page.waitForSelector(selectorDropdown);
+                await page.type(inputBusqueda, parteProcesal, { delay: 30 });
 
-            const valorNumerico = await page.evaluate((textoUsuario, selector) => {
-                const select = document.querySelector<HTMLSelectElement>(selector);
-                if (!select) return null;
-                const opciones = Array.from(select.options);
-                const opcionCorrecta = opciones.find(opt =>
-                    opt.text.toUpperCase().includes(textoUsuario.toUpperCase())
-                );
-                return opcionCorrecta ? opcionCorrecta.value : null;
-            }, juzgado, selectorDropdown);
+                await page.waitForSelector('::-p-text(Por corporación)');
+                await page.click('::-p-text(Por corporación)');
 
-            if (valorNumerico) {
-                await page.select(selectorDropdown, valorNumerico);
-                await new Promise(r => setTimeout(r, 1500));
-            } else {
-                throw new Error(`El juzgado "${juzgado}" no se encontro en la lista.`);
-            }
+                const selectorDropdown = '#FW_LstCorporacion';
+                await page.waitForSelector(selectorDropdown);
 
-            const btnBuscar = '#FW_buscarnormal';
-            await page.waitForSelector(btnBuscar);
-            await page.click(btnBuscar);
+                const valorNumerico = await page.evaluate((textoUsuario, selector) => {
+                    const select = document.querySelector<HTMLSelectElement>(selector);
+                    if (!select) return null;
+                    const opciones = Array.from(select.options);
+                    const opcionCorrecta = opciones.find(opt =>
+                        opt.text.toUpperCase().includes(textoUsuario.toUpperCase())
+                    );
+                    return opcionCorrecta ? opcionCorrecta.value : null;
+                }, juzgado, selectorDropdown);
 
-            const selectorTabla = '#DT_listadoprocs tbody tr';
-            await page.waitForSelector(selectorTabla, { timeout: 30000 });
+                if (valorNumerico) {
+                    await page.select(selectorDropdown, valorNumerico);
+                    await new Promise(r => setTimeout(r, 1500));
+                } else {
+                    this.logger.warn(`El juzgado "${juzgado}" no se encontro. Omitiendo búsqueda para ${parteProcesal}.`);
+                    continue;
+                }
 
-            const resultados = await page.evaluate(() => {
-                const filas = Array.from(document.querySelectorAll('#DT_listadoprocs tbody tr'));
+                const btnBuscar = '#FW_buscarnormal';
+                await page.waitForSelector(btnBuscar);
+                
+                // Hacer clic y esperar a que la red se estabilice para no leer los resultados de la búsqueda anterior
+                await Promise.all([
+                    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
+                    page.click(btnBuscar)
+                ]);
 
-                return filas.map(fila => {
-                    const celdas = fila.querySelectorAll('td');
+                // Esperar a que aparezca la tabla o el mensaje de resultados
+                const selectorTabla = '#DT_listadoprocs tbody tr';
+                try {
+                    await page.waitForSelector(selectorTabla, { timeout: 30000 });
+                } catch (e) {
+                    this.logger.warn(`No se encontraron resultados o demoró demasiado para ${parteProcesal}.`);
+                    continue;
+                }
 
-                    if (celdas.length < 3 || celdas[0].innerText.includes('Ningún')) {
-                        return null;
-                    }
+                const resultados = await page.evaluate(() => {
+                    const filas = Array.from(document.querySelectorAll('#DT_listadoprocs tbody tr'));
 
-                    let radicado = celdas[1]?.innerText.trim() || '';
-                    if (radicado.startsWith("'")) radicado = radicado.substring(1);
+                    return filas.map(fila => {
+                        const celdas = fila.querySelectorAll('td');
 
-                    const detallesBrutos = celdas[2]?.innerText || '';
-                    const lineasDetalles = detallesBrutos.split('\n').map(l => l.trim());
-
-                    let infoEstructurada = {
-                        radicado: radicado,
-                        tipoProceso: lineasDetalles[0] ? lineasDetalles[0].split(' - ')[0] : '',
-                        ponente: 'No registra',
-                        demandante: 'No registra',
-                        demandado: 'No registra',
-                        textoCompleto: detallesBrutos
-                    };
-
-                    lineasDetalles.forEach(linea => {
-                        if (linea.startsWith('Ponente:')) {
-                            infoEstructurada.ponente = linea.replace('Ponente:', '').trim();
-                        } else if (linea.startsWith('Demandante:')) {
-                            infoEstructurada.demandante = linea.replace('Demandante:', '').trim();
-                        } else if (linea.startsWith('Demandado:')) {
-                            infoEstructurada.demandado = linea.replace('Demandado:', '').trim();
+                        if (celdas.length < 3 || celdas[0].innerText.includes('Ningún') || celdas[0].innerText.includes('No se encontraron')) {
+                            return null;
                         }
-                    });
 
-                    return infoEstructurada;
-                }).filter(item => item !== null);
-            });
+                        let radicado = celdas[1]?.innerText.trim() || '';
+                        if (radicado.startsWith("'")) radicado = radicado.substring(1);
 
-            this.logger.log(`Extraccion completada. Se encontraron ${resultados.length} registros.`);
+                        const detallesBrutos = celdas[2]?.innerText || '';
+                        const lineasDetalles = detallesBrutos.split('\n').map(l => l.trim());
 
-            //await this.guardarEnExcel(resultados, 'Base_Datos_SAMAI');
+                        let infoEstructurada = {
+                            radicado: radicado,
+                            tipoProceso: lineasDetalles[0] ? lineasDetalles[0].split(' - ')[0] : '',
+                            ponente: 'No registra',
+                            demandante: 'No registra',
+                            demandado: 'No registra',
+                            textoCompleto: detallesBrutos
+                        };
 
-            if (resultados.length > 0) {
-                await this.saveDataToDatabase(resultados, taskId);
+                        lineasDetalles.forEach(linea => {
+                            if (linea.startsWith('Ponente:')) {
+                                infoEstructurada.ponente = linea.replace('Ponente:', '').trim();
+                            } else if (linea.startsWith('Demandante:')) {
+                                infoEstructurada.demandante = linea.replace('Demandante:', '').trim();
+                            } else if (linea.startsWith('Demandado:')) {
+                                infoEstructurada.demandado = linea.replace('Demandado:', '').trim();
+                            }
+                        });
+
+                        return infoEstructurada;
+                    }).filter(item => item !== null);
+                });
+                
+                todosLosResultados = todosLosResultados.concat(resultados);
             }
 
-            return resultados;
+            this.logger.log(`Extraccion completada. Se encontraron ${todosLosResultados.length} registros en total.`);
+
+            //await this.guardarEnExcel(todosLosResultados, 'Base_Datos_SAMAI');
+
+            if (todosLosResultados.length > 0) {
+                await this.saveDataToDatabase(todosLosResultados, taskId);
+            }
+
+            return todosLosResultados;
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';

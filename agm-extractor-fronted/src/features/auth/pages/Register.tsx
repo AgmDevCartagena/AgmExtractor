@@ -76,7 +76,7 @@ export default function Register() {
                         <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
                             <Scale size={32} />
                         </div>
-                        <h1 className="text-4xl font-black tracking-tighter">Extractor</h1>
+                        <h1 className="text-4xl font-black tracking-tighter">RADAR</h1>
                     </div>
                     <h2 className="text-5xl font-bold mb-6 leading-tight">
                         Únete a la <span className="text-blue-400">revolución</span> jurídica.
@@ -87,8 +87,8 @@ export default function Register() {
                 </div>
 
                 <div className="absolute bottom-12 left-12 right-12 text-slate-500 text-sm flex justify-between border-t border-slate-800 pt-8">
-                    <span>© 2026 AGM Extractor</span>
-                    <span>Versión 2.0.0</span>
+                    <span>© 2026 AGM RADAR</span>
+                    <span>Versión 1.0.0</span>
                 </div>
             </div>
 

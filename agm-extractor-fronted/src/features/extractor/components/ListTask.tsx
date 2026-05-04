@@ -122,8 +122,8 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea }
                             <div className="flex justify-between items-start gap-3">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="font-bold text-slate-800 text-[13px] truncate uppercase tracking-tight">
-                                            {tarea.parteProcesal}
+                                        <h4 className="font-bold text-slate-800 text-[13px] truncate uppercase tracking-tight" title={Array.isArray(tarea.parteProcesal) ? tarea.parteProcesal.join(', ') : tarea.parteProcesal}>
+                                            {Array.isArray(tarea.parteProcesal) ? tarea.parteProcesal.join(', ') : tarea.parteProcesal}
                                         </h4>
                                         {tareaSeleccionada === tarea.id && (
                                             <Activity size={12} className="text-blue-600 animate-pulse shrink-0" />

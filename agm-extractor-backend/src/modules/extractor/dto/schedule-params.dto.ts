@@ -1,10 +1,10 @@
-import { IsString, IsNotEmpty, MaxLength, Matches, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, MaxLength, Matches, IsUUID, IsArray } from 'class-validator';
 
 export class ScheduleParamsDto {
-    @IsString()
     @IsNotEmpty({ message: 'parteProcesal es requerido' })
-    @MaxLength(100, { message: 'parteProcesal no puede tener más de 100 caracteres' })
-    parteProcesal!: string;
+    @IsArray({ message: 'parteProcesal debe ser un arreglo de strings' })
+    @MaxLength(255, { each: true, message: 'cada elemento de parteProcesal debe tener máximo 255 caracteres' })
+    parteProcesal!: string[];
 
     @IsString()
     @IsNotEmpty({ message: 'juzgado es requerido' })

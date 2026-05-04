@@ -28,7 +28,7 @@ export default function Dashboard() {
                         <div className="p-1.5 bg-blue-600 rounded-lg">
                             <Scale size={18} className="text-white" />
                         </div>
-                        <h1 className="text-lg font-bold text-slate-900">Extractor</h1>
+                        <h1 className="text-lg font-bold text-slate-900">RADAR</h1>
                         <div className="hidden lg:block border-l border-slate-200 h-6 mx-2"></div>
                     </div>
 

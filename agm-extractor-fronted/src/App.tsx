@@ -11,7 +11,7 @@ export default function App() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-blue-600 font-bold text-xl animate-pulse">
-                    Cargando Extractor...
+                    Cargando Radar...
                 </div>
             </div>
         );

@@ -80,7 +80,7 @@ model Verification {
 
 model TareaProgramada {
   id            String  @id @default(uuid())
-  parteProcesal String
+  parteProcesal String[]
   juzgado       String
   frecuencia    String
   activa        Boolean @default(true)

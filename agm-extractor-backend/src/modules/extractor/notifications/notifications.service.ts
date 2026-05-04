@@ -29,7 +29,7 @@ export class NotificationsService {
             telefono: telefonoUsuario,
             cantidad: newProcess.length,
             juzgado: task.juzgado,
-            parteProcesal: task.parteProcesal,
+            parteProcesal: Array.isArray(task.parteProcesal) ? task.parteProcesal.join(', ') : task.parteProcesal,
             fecha: new Date().toLocaleDateString('es-CO'),
             procesos: newProcess.map(proc => ({
                 radicado: proc.radicado,

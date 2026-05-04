@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useProgramarTarea, type FrecuenciaPermitida } from '../hooks/useTask';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Calendar, Landmark, Send, User } from 'lucide-react';
+import { Calendar, Landmark, Send, User, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -91,7 +90,8 @@ const CORPORACIONES = [
 ];
 
 export default function FormularioExtraccion({ onJobCreated }: FormularioProps) {
-    const [parteProcesal, setParteProcesal] = useState('');
+    const [parteProcesalInput, setParteProcesalInput] = useState('');
+    const [partesProcesales, setPartesProcesales] = useState<string[]>([]);
     const [juzgado, setJuzgado] = useState('');
     const [frecuencia, setFrecuencia] = useState<FrecuenciaPermitida>('1d');
 
@@ -101,12 +101,26 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Buscamos el label correspondiente al value seleccionado
         const corporacionSeleccionada = CORPORACIONES.find(c => c.value === juzgado);
         const juzgadoNombre = corporacionSeleccionada ? corporacionSeleccionada.label : juzgado;
 
+        let currentPartes = [...partesProcesales];
+        
+        // Agregar el texto actual como parte procesal si no ha presionado Enter
+        if (parteProcesalInput.trim()) {
+            if (!currentPartes.includes(parteProcesalInput.trim())) {
+                currentPartes.push(parteProcesalInput.trim());
+            }
+        }
+
+        if (currentPartes.length === 0) {
+            toast.error('Por favor ingresa al menos una parte procesal válida.');
+            return;
+        }
+
         programarMutation.mutate(
-            { parteProcesal, juzgado: juzgadoNombre, frecuencia },
+            
+            { parteProcesal: currentPartes as any, juzgado: juzgadoNombre, frecuencia },
             {
                 onSuccess: (data) => {
                     toast.success('Radar programado exitosamente');
@@ -114,7 +128,8 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
 
                     onJobCreated(data?.id || '');
 
-                    setParteProcesal('');
+                    setPartesProcesales([]);
+                    setParteProcesalInput('');
                     setJuzgado('');
                     setFrecuencia('1d');
                 },
@@ -144,17 +159,41 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
                         <div className="space-y-2">
                             <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                                 <User size={14} className="text-slate-400" />
-                                Parte Procesal
+                                Partes Procesales
                             </label>
-                            <Input
-                                required
-                                maxLength={100}
-                                value={parteProcesal}
-                                onChange={(e) => setParteProcesal(e.target.value)}
-                                placeholder="Ej. Banco de Bogotá"
-                                className="bg-slate-50 border-slate-200 focus:bg-white transition-all"
-                            />
-                            <p className="text-[10px] text-slate-400">Nombre completo del demandante o demandado.</p>
+                            <div className="bg-slate-50 border border-slate-200 rounded-md focus-within:bg-white focus-within:ring-1 focus-within:ring-blue-500 transition-all p-1.5 flex flex-wrap gap-1.5 items-center min-h-[42px]">
+                                {partesProcesales.map((parte, idx) => (
+                                    <span key={idx} className="bg-blue-100 text-blue-700 text-[12px] font-semibold px-2 py-1 rounded-sm flex items-center gap-1.5 shadow-sm">
+                                        {parte}
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setPartesProcesales(partesProcesales.filter(p => p !== parte))} 
+                                            className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
+                                        >
+                                            <X size={12} className="text-blue-600" />
+                                        </button>
+                                    </span>
+                                ))}
+                                <input
+                                    type="text"
+                                    value={parteProcesalInput}
+                                    onChange={(e) => setParteProcesalInput(e.target.value)}
+                                    // Manejar la tecla enter o coma para agregar un nombre nuevo
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ',') {
+                                            e.preventDefault();
+                                            const val = parteProcesalInput.trim();
+                                            if (val && !partesProcesales.includes(val)) {
+                                                setPartesProcesales([...partesProcesales, val]);
+                                            }
+                                            setParteProcesalInput('');
+                                        }
+                                    }}
+                                    placeholder={partesProcesales.length === 0 ? "Ej. Banco de Bogotá..." : "Agregar otro..."}
+                                    className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm min-w-[140px] px-1.5 py-1"
+                                />
+                            </div>
+                            <p className="text-[10px] text-slate-400">Presiona 'Enter' o la coma ( , ) para ir agregando a la lista y presiona el botón 'Programar Búsqueda' para guardar.</p>
                         </div>
 
                         <div className="space-y-2">
