@@ -151,7 +151,7 @@ export class ExtractorService implements OnModuleInit {
     }
 
     async extractData(taskId: string, partesProcesales: string[], juzgado: string): Promise<any[]> {
-        this.logger.log(`Iniciando extraccion para: ${partesProcesales.join(', ')} en ${juzgado}`);
+        this.logger.log(`Iniciando extracción para ${partesProcesales.length} partes en ${juzgado}`);
 
         const browser = await puppeteer.launch({
             headless: true,
@@ -162,64 +162,68 @@ export class ExtractorService implements OnModuleInit {
         try {
             const page = await browser.newPage();
 
-            // Navegamos a la página una sola vez antes de iterar
             await page.goto('https://samai.consejodeestado.gov.co/Vistas/Casos/procesos.aspx', {
                 waitUntil: 'networkidle2',
                 timeout: 60000
             });
 
+
+            await page.waitForSelector('::-p-text(Parte procesal)');
+            await page.click('::-p-text(Parte procesal)');
+
+            await page.waitForSelector('::-p-text(Por corporación)');
+            await page.click('::-p-text(Por corporación)');
+
+            const selectorDropdown = '#FW_LstCorporacion';
+            await page.waitForSelector(selectorDropdown);
+
+            const valorNumerico = await page.evaluate((textoUsuario, selector) => {
+                const select = document.querySelector<HTMLSelectElement>(selector);
+                if (!select) return null;
+                const opciones = Array.from(select.options);
+                const opcionCorrecta = opciones.find(opt =>
+                    opt.text.toUpperCase().includes(textoUsuario.toUpperCase())
+                );
+                return opcionCorrecta ? opcionCorrecta.value : null;
+            }, juzgado, selectorDropdown);
+
+            if (valorNumerico) {
+                await page.select(selectorDropdown, valorNumerico);
+                await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => { });
+            } else {
+                this.logger.warn(`El juzgado "${juzgado}" no se encontró. Abortando tarea para no perder tiempo.`);
+                return [];
+            }
+
             let todosLosResultados: any[] = [];
+            const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
+            const btnBuscar = '#FW_buscarnormal';
+
+            await page.waitForSelector(inputBusqueda);
 
             for (const parteProcesal of partesProcesales) {
-                await page.waitForSelector('::-p-text(Parte procesal)');
-                await page.click('::-p-text(Parte procesal)');
 
-                const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
-                await page.waitForSelector(inputBusqueda);
-                
-                // Limpiar el campo de búsqueda antes de ingresar la nueva palabra
                 await page.click(inputBusqueda, { clickCount: 3 });
                 await page.keyboard.press('Backspace');
 
-                await page.type(inputBusqueda, parteProcesal, { delay: 30 });
+                await new Promise(r => setTimeout(r, 500));
 
-                await page.waitForSelector('::-p-text(Por corporación)');
-                await page.click('::-p-text(Por corporación)');
+                await page.type(inputBusqueda, parteProcesal, { delay: 10 });
 
-                const selectorDropdown = '#FW_LstCorporacion';
-                await page.waitForSelector(selectorDropdown);
+                await page.evaluate(() => {
+                    const tbody = document.querySelector('#DT_listadoprocs tbody');
+                    if (tbody) tbody.innerHTML = '<tr id="fila-espera"><td>Cargando...</td></tr>';
+                });
 
-                const valorNumerico = await page.evaluate((textoUsuario, selector) => {
-                    const select = document.querySelector<HTMLSelectElement>(selector);
-                    if (!select) return null;
-                    const opciones = Array.from(select.options);
-                    const opcionCorrecta = opciones.find(opt =>
-                        opt.text.toUpperCase().includes(textoUsuario.toUpperCase())
-                    );
-                    return opcionCorrecta ? opcionCorrecta.value : null;
-                }, juzgado, selectorDropdown);
+                await page.click(btnBuscar);
 
-                if (valorNumerico) {
-                    await page.select(selectorDropdown, valorNumerico);
-                    await new Promise(r => setTimeout(r, 1500));
-                } else {
-                    this.logger.warn(`El juzgado "${juzgado}" no se encontro. Omitiendo búsqueda para ${parteProcesal}.`);
-                    continue;
-                }
-
-                const btnBuscar = '#FW_buscarnormal';
-                await page.waitForSelector(btnBuscar);
-                
-                // Hacer clic y esperar a que la red se estabilice para no leer los resultados de la búsqueda anterior
-                await Promise.all([
-                    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
-                    page.click(btnBuscar)
-                ]);
-
-                // Esperar a que aparezca la tabla o el mensaje de resultados
-                const selectorTabla = '#DT_listadoprocs tbody tr';
                 try {
-                    await page.waitForSelector(selectorTabla, { timeout: 30000 });
+                    await page.waitForFunction(() => {
+                        const tbody = document.querySelector('#DT_listadoprocs tbody');
+                        return tbody && !tbody.querySelector('#fila-espera');
+                    }, { timeout: 15000 });
+
+                    await new Promise(r => setTimeout(r, 500));
                 } catch (e) {
                     this.logger.warn(`No se encontraron resultados o demoró demasiado para ${parteProcesal}.`);
                     continue;
@@ -263,13 +267,11 @@ export class ExtractorService implements OnModuleInit {
                         return infoEstructurada;
                     }).filter(item => item !== null);
                 });
-                
+
                 todosLosResultados = todosLosResultados.concat(resultados);
             }
 
-            this.logger.log(`Extraccion completada. Se encontraron ${todosLosResultados.length} registros en total.`);
-
-            //await this.guardarEnExcel(todosLosResultados, 'Base_Datos_SAMAI');
+            this.logger.log(`Extracción completada. ${todosLosResultados.length} registros totales.`);
 
             if (todosLosResultados.length > 0) {
                 await this.saveDataToDatabase(todosLosResultados, taskId);
@@ -280,8 +282,7 @@ export class ExtractorService implements OnModuleInit {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             const errorStack = error instanceof Error ? error.stack : '';
-
-            this.logger.error('Error durante la automatizacion', errorStack);
+            this.logger.error(`Fallo en el scraping: ${errorMessage}`, errorStack);
             throw new Error(`Fallo en el scraping: ${errorMessage}`);
         } finally {
             await browser.close();
