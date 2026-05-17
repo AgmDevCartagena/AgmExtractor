@@ -4,6 +4,8 @@ import { ScheduleParamsDto } from './dto/schedule-params.dto';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { PaginationQueryDto } from './dto/paginate-query.dto';
+import { anonymous } from 'better-auth/plugins';
+import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 
 @Controller('extractor')
 export class ExtractorController {
@@ -30,7 +32,7 @@ export class ExtractorController {
     }
 
     @Get('schedule')
-    @Throttle({ default: { limit: 20, ttl: 70000 } })
+    @Throttle({ default: { limit: 100, ttl: 70000 } })
     getDataForScheduledTask(
         @CurrentUser() user: { id: string },
         @Query() pagination: PaginationQueryDto,
@@ -39,11 +41,18 @@ export class ExtractorController {
     }
 
     @Get('schedule/tasks/:userId')
-    @Throttle({ default: { limit: 20, ttl: 70000 } })
+    @Throttle({ default: { limit: 100, ttl: 70000 } })
     getScheduledTasks(
         @Param('userId') userId: string,
         @Query() pagination: PaginationQueryDto
     ) {
         return this.extractorService.getScheduledTasks(pagination, userId);
+    }
+
+    @Get('queue/status')
+    @AllowAnonymous()
+    @Throttle({ default: { limit: 100, ttl: 70000 } })
+    getQueueStatus() {
+        return this.extractorService.getQueueStatus();
     }
 }

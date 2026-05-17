@@ -9,6 +9,8 @@ import { CronJob } from 'cron';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQueryDto } from './dto/paginate-query.dto';
 import { NotificationsService } from './notifications/notifications.service';
+import { BrowserManager } from './browser.manager';
+import { ExtractionQueue } from './extractor.queue';
 
 
 @Injectable()
@@ -19,7 +21,9 @@ export class ExtractorService implements OnModuleInit {
     constructor(
         private schedulerRegistry: SchedulerRegistry,
         private readonly prisma: PrismaService,
-        private readonly notificationsService: NotificationsService
+        private readonly notificationsService: NotificationsService,
+        private readonly browserManager: BrowserManager,
+        private readonly extractionQueue: ExtractionQueue
     ) {
         if (!fs.existsSync(this.dataDirectory)) {
             fs.mkdirSync(this.dataDirectory, { recursive: true });
@@ -84,89 +88,78 @@ export class ExtractorService implements OnModuleInit {
 
     async scheduleExtraction(params: ScheduleParamsDto, userId: string) {
         const { frecuencia, parteProcesal: partesProcesales, juzgado } = params;
+
         const cronExpression = this.translateFrecuency(frecuencia);
         if (!cronExpression) {
             throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
         }
 
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId }
-        })
-
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
 
         const newTask = await this.prisma.tareaProgramada.create({
-            data: {
-                userId,
-                frecuencia,
-                parteProcesal: partesProcesales,
-                juzgado
-            }
-        })
-
-        const nameJob = newTask.id;
-        const job = new CronJob(cronExpression, async () => {
-            this.logger.log(`Ejecutando tarea programada para el usuario ${userId} con frecuencia ${frecuencia}`);
-            try {
-                await this.extractData(newTask.id, partesProcesales, juzgado);
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-                this.logger.error(`Error en tarea programada para el usuario ${userId}: ${errorMessage}`);
-            }
+            data: { userId, frecuencia, parteProcesal: partesProcesales, juzgado },
         });
-        this.schedulerRegistry.addCronJob(nameJob, job);
+
+        const job = new CronJob(cronExpression, () => {
+            this.extractionQueue.enqueue(newTask.id, () =>
+                this.extractData(newTask.id, partesProcesales, juzgado)
+            ).catch(err =>
+                this.logger.error(`Error en tarea [${newTask.id}]: ${err?.message}`)
+            );
+        });
+
+        this.schedulerRegistry.addCronJob(newTask.id, job);
         job.start();
-        this.logger.log(`Tarea programada creada para el usuario ${userId} con frecuencia ${frecuencia}`);
+
+        this.logger.log(`Tarea [${newTask.id}] creada para usuario ${userId} con frecuencia ${frecuencia}`);
 
         return {
-            message: `Tarea programada creada con éxito para el usuario ${userId} con frecuencia ${frecuencia}`,
-            jobName: nameJob,
-            frecuencia
-        }
+            message: `Tarea programada creada con éxito`,
+            jobName: newTask.id,
+            frecuencia,
+        };
     }
 
     async stopScheduledExtraction(jobId: string, userId: string) {
         try {
             const userTask = await this.prisma.tareaProgramada.findFirst({
-                where: { id: jobId, userId }
-            })
+                where: { id: jobId, userId },
+            });
+
             if (!userTask) {
-                throw new HttpException('Tarea programada no encontrada para este usuario', HttpStatus.NOT_FOUND);
+                throw new HttpException('Tarea no encontrada para este usuario', HttpStatus.NOT_FOUND);
             }
+
             const job = this.schedulerRegistry.getCronJob(jobId);
             job.stop();
             this.schedulerRegistry.deleteCronJob(jobId);
-            this.logger.log(`Tarea programada con ID ${jobId} detenida y eliminada`);
+
             await this.prisma.tareaProgramada.update({
                 where: { id: jobId },
-                data: { activa: false, deletedAt: new Date() }
-            })
-            this.logger.log(`Tarea [${job}] detenida y desactivada en BD.`);
-            return { message: `Tarea cancelada exitosamente` };
+                data: { activa: false, deletedAt: new Date() },
+            });
+
+            this.logger.log(`Tarea [${jobId}] detenida y desactivada.`);
+            return { message: 'Tarea cancelada exitosamente' };
+
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al detener tarea programada con ID ${jobId}: ${errorMessage}`);
-            throw new HttpException(`Error al detener tarea programada: ${errorMessage}`, HttpStatus.BAD_REQUEST);
+            const msg = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Error al detener tarea [${jobId}]: ${msg}`);
+            throw new HttpException(`Error al detener tarea: ${msg}`, HttpStatus.BAD_REQUEST);
         }
     }
 
     async extractData(taskId: string, partesProcesales: string[], juzgado: string): Promise<any[]> {
-        this.logger.log(`Iniciando extracción para ${partesProcesales.length} partes en ${juzgado}`);
+        this.logger.log(`Iniciando extracción — tarea [${taskId}] | partes: ${partesProcesales.length} | juzgado: ${juzgado}`);
 
-        const browser = await puppeteer.launch({
-            headless: true,
-            executablePath: process.env.CHROMIUM_PATH || undefined,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-        });
+        const page = await this.browserManager.newPage();
 
         try {
-            const page = await browser.newPage();
-
             await page.goto('https://samai.consejodeestado.gov.co/Vistas/Casos/procesos.aspx', {
                 waitUntil: 'networkidle2',
-                timeout: 60000
+                timeout: 60000,
             });
-
 
             await page.waitForSelector('::-p-text(Parte procesal)');
             await page.click('::-p-text(Parte procesal)');
@@ -177,101 +170,139 @@ export class ExtractorService implements OnModuleInit {
             const selectorDropdown = '#FW_LstCorporacion';
             await page.waitForSelector(selectorDropdown);
 
-            const valorNumerico = await page.evaluate((textoUsuario, selector) => {
+            const valorNumerico = await page.evaluate((texto, selector) => {
                 const select = document.querySelector<HTMLSelectElement>(selector);
                 if (!select) return null;
-                const opciones = Array.from(select.options);
-                const opcionCorrecta = opciones.find(opt =>
-                    opt.text.toUpperCase().includes(textoUsuario.toUpperCase())
+                const opcion = Array.from(select.options).find(opt =>
+                    opt.text.toUpperCase().includes(texto.toUpperCase())
                 );
-                return opcionCorrecta ? opcionCorrecta.value : null;
+                return opcion?.value ?? null;
             }, juzgado, selectorDropdown);
 
-            if (valorNumerico) {
-                await page.select(selectorDropdown, valorNumerico);
-                await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => { });
-            } else {
-                this.logger.warn(`El juzgado "${juzgado}" no se encontró. Abortando tarea para no perder tiempo.`);
+            if (!valorNumerico) {
+                this.logger.warn(`Juzgado "${juzgado}" no encontrado en el dropdown. Abortando tarea [${taskId}].`);
                 return [];
             }
 
-            let todosLosResultados: any[] = [];
+            await page.select(selectorDropdown, valorNumerico);
+            await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => { });
+
             const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
             const btnBuscar = '#FW_buscarnormal';
-
             await page.waitForSelector(inputBusqueda);
 
+            let todosLosResultados: any[] = [];
+
             for (const parteProcesal of partesProcesales) {
+                this.logger.log(`[${taskId}] Buscando: "${parteProcesal}"`);
 
-                await page.click(inputBusqueda, { clickCount: 3 });
-                await page.keyboard.press('Backspace');
+                await page.evaluate((selector) => {
+                    const input = document.querySelector<HTMLInputElement>(selector);
+                    if (!input) return;
+                    input.focus();
+                    input.value = '';
+                    ['input', 'change', 'keyup'].forEach(evt =>
+                        input.dispatchEvent(new Event(evt, { bubbles: true }))
+                    );
+                }, inputBusqueda);
 
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 300));
 
-                await page.type(inputBusqueda, parteProcesal, { delay: 10 });
+                await page.type(inputBusqueda, parteProcesal.toUpperCase(), { delay: 50 });
+
+                await page.evaluate((selector) => {
+                    document.querySelector<HTMLInputElement>(selector)
+                        ?.dispatchEvent(new Event('blur', { bubbles: true }));
+                }, inputBusqueda);
+
+                await new Promise(r => setTimeout(r, 200));
 
                 await page.evaluate(() => {
-                    const tbody = document.querySelector('#DT_listadoprocs tbody');
-                    if (tbody) tbody.innerHTML = '<tr id="fila-espera"><td>Cargando...</td></tr>';
+                    document.querySelector('#DT_listadoprocs tbody')
+                        ?.setAttribute('data-loading', 'true');
                 });
 
                 await page.click(btnBuscar);
 
-                try {
+                const waitForTable = async (timeoutMs: number) => {
                     await page.waitForFunction(() => {
                         const tbody = document.querySelector('#DT_listadoprocs tbody');
-                        return tbody && !tbody.querySelector('#fila-espera');
-                    }, { timeout: 15000 });
+                        if (!tbody) return false;
+                        if (tbody.getAttribute('data-loading') !== 'true') return true;
 
+                        const rows = Array.from(tbody.querySelectorAll('tr'));
+                        if (rows.length === 0) return false;
+
+                        const text = rows.map(r => r.textContent || '').join(' ');
+                        const isDone = !text.includes('Cargando') && !text.includes('Procesando');
+
+                        if (isDone) tbody.removeAttribute('data-loading');
+                        return isDone;
+                    }, { timeout: timeoutMs, polling: 300 });
+                };
+
+                try {
+                    await waitForTable(30000);
                     await new Promise(r => setTimeout(r, 500));
-                } catch (e) {
-                    this.logger.warn(`No se encontraron resultados o demoró demasiado para ${parteProcesal}.`);
-                    continue;
+                } catch {
+                    this.logger.warn(`[${taskId}] Timeout para "${parteProcesal}". Reintentando con Enter...`);
+                    try {
+                        await page.focus(inputBusqueda);
+                        await page.keyboard.press('Enter');
+                        await waitForTable(30000);
+                        await new Promise(r => setTimeout(r, 500));
+                    } catch {
+                        this.logger.warn(`[${taskId}] Sin resultados para "${parteProcesal}" tras retry.`);
+                        continue;
+                    }
                 }
 
                 const resultados = await page.evaluate(() => {
-                    const filas = Array.from(document.querySelectorAll('#DT_listadoprocs tbody tr'));
+                    return Array.from(document.querySelectorAll('#DT_listadoprocs tbody tr'))
+                        .map(fila => {
+                            const celdas = fila.querySelectorAll('td');
+                            if (celdas.length < 3) return null;
 
-                    return filas.map(fila => {
-                        const celdas = fila.querySelectorAll('td');
+                            const textoFila = celdas[0]?.innerText || '';
+                            if (
+                                textoFila.includes('Ningún') ||
+                                textoFila.includes('No se encontraron')
+                            ) return null;
 
-                        if (celdas.length < 3 || celdas[0].innerText.includes('Ningún') || celdas[0].innerText.includes('No se encontraron')) {
-                            return null;
-                        }
+                            let radicado = celdas[1]?.innerText.trim() || '';
+                            if (radicado.startsWith("'")) radicado = radicado.substring(1);
 
-                        let radicado = celdas[1]?.innerText.trim() || '';
-                        if (radicado.startsWith("'")) radicado = radicado.substring(1);
+                            const textoCompleto = celdas[2]?.innerText || '';
+                            const lineas = textoCompleto.split('\n').map((l: string) => l.trim());
 
-                        const detallesBrutos = celdas[2]?.innerText || '';
-                        const lineasDetalles = detallesBrutos.split('\n').map(l => l.trim());
+                            const info: any = {
+                                radicado,
+                                tipoProceso: lineas[0]?.split(' - ')[0] || '',
+                                ponente: 'No registra',
+                                demandante: 'No registra',
+                                demandado: 'No registra',
+                                textoCompleto,
+                            };
 
-                        let infoEstructurada = {
-                            radicado: radicado,
-                            tipoProceso: lineasDetalles[0] ? lineasDetalles[0].split(' - ')[0] : '',
-                            ponente: 'No registra',
-                            demandante: 'No registra',
-                            demandado: 'No registra',
-                            textoCompleto: detallesBrutos
-                        };
+                            lineas.forEach((linea: string) => {
+                                if (linea.startsWith('Ponente:'))
+                                    info.ponente = linea.replace('Ponente:', '').trim();
+                                else if (linea.startsWith('Demandante:'))
+                                    info.demandante = linea.replace('Demandante:', '').trim();
+                                else if (linea.startsWith('Demandado:'))
+                                    info.demandado = linea.replace('Demandado:', '').trim();
+                            });
 
-                        lineasDetalles.forEach(linea => {
-                            if (linea.startsWith('Ponente:')) {
-                                infoEstructurada.ponente = linea.replace('Ponente:', '').trim();
-                            } else if (linea.startsWith('Demandante:')) {
-                                infoEstructurada.demandante = linea.replace('Demandante:', '').trim();
-                            } else if (linea.startsWith('Demandado:')) {
-                                infoEstructurada.demandado = linea.replace('Demandado:', '').trim();
-                            }
-                        });
-
-                        return infoEstructurada;
-                    }).filter(item => item !== null);
+                            return info;
+                        })
+                        .filter(Boolean);
                 });
 
+                this.logger.log(`[${taskId}] "${parteProcesal}": ${resultados.length} resultados.`);
                 todosLosResultados = todosLosResultados.concat(resultados);
             }
 
-            this.logger.log(`Extracción completada. ${todosLosResultados.length} registros totales.`);
+            this.logger.log(`[${taskId}] Extracción completada. Total: ${todosLosResultados.length} registros.`);
 
             if (todosLosResultados.length > 0) {
                 await this.saveDataToDatabase(todosLosResultados, taskId);
@@ -280,12 +311,12 @@ export class ExtractorService implements OnModuleInit {
             return todosLosResultados;
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            const errorStack = error instanceof Error ? error.stack : '';
-            this.logger.error(`Fallo en el scraping: ${errorMessage}`, errorStack);
-            throw new Error(`Fallo en el scraping: ${errorMessage}`);
+            const msg = error instanceof Error ? error.message : 'Error desconocido';
+            const stack = error instanceof Error ? error.stack : '';
+            this.logger.error(`[${taskId}] Fallo en scraping: ${msg}`, stack);
+            throw new Error(`Fallo en el scraping: ${msg}`);
         } finally {
-            await browser.close();
+            await page.close();
         }
     }
 
@@ -391,49 +422,70 @@ export class ExtractorService implements OnModuleInit {
     }
 
     private async saveDataToDatabase(data: any[], taskId: string) {
-        if (!data || data.length === 0) {
-            this.logger.log(`Scraper terminó. No se encontraron coincidencias hoy para la tarea ${taskId}.`);
-            return;
-        }
+        if (!data || data.length === 0) return;
+
         try {
             const tarea = await this.prisma.tareaProgramada.findUnique({
                 where: { id: taskId },
-                include: { user: true }
+                include: { user: true },
             });
 
             if (!tarea) {
-                this.logger.warn(`No se encontró la tarea con ID ${taskId}`);
+                this.logger.warn(`No se encontró la tarea [${taskId}]`);
+                return;
+            }
+
+            const radicadosExistentes = await this.prisma.procesosJudiciales.findMany({
+                where: {
+                    tareaProgramadaId: taskId,
+                    radicado: { in: data.map(d => d.radicado) },
+                },
+                select: { radicado: true },
+            });
+
+            const existentes = new Set(radicadosExistentes.map(r => r.radicado));
+
+            const nuevosDatos = data.filter(d => !existentes.has(d.radicado));
+
+            this.logger.log(
+                `[${taskId}] Scrapeados: ${data.length} | ` +
+                `Ya existían: ${data.length - nuevosDatos.length} | ` +
+                `Nuevos: ${nuevosDatos.length}`
+            );
+
+            if (nuevosDatos.length === 0) {
+                this.logger.log(`[${taskId}] Sin procesos nuevos. No se inserta ni notifica.`);
                 return;
             }
 
             const userPhone = tarea.user.telefono;
-            if (!userPhone) {
-                this.logger.warn(`El usuario ${tarea.userId} no tiene un número de teléfono registrado. No se enviará notificación.`);
+            if (userPhone) {
+                this.notificationsService
+                    .sendNotification(nuevosDatos as any, tarea, userPhone)
+                    .catch(err => this.logger.error(`[${taskId}] Error al notificar: ${err?.message}`));
+            } else {
+                this.logger.warn(`[${taskId}] Usuario sin teléfono, no se notifica.`);
             }
 
-
-            this.notificationsService.sendNotification(data as any, tarea, userPhone as string)
-                .catch(err => this.logger.error('Error al notificar a n8n', err));
-
-            const dataInsert = data.map(d => ({
+            const dataInsert = nuevosDatos.map(d => ({
                 radicado: d.radicado,
                 tipoProceso: d.tipoProceso,
                 ponente: d.ponente,
                 demandante: d.demandante,
                 textoCompleto: d.textoCompleto,
-                tareaProgramadaId: taskId
+                tareaProgramadaId: taskId,
             }));
 
             const result = await this.prisma.procesosJudiciales.createMany({
                 data: dataInsert,
-                skipDuplicates: true
+                skipDuplicates: true,
             });
 
-            this.logger.log(`Scraper ejecutado. Encontrados: ${data.length}. Nuevos insertados en BD: ${result.count}`);
+            this.logger.log(`[${taskId}] Insertados en BD: ${result.count}`);
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error procesando los datos extraídos: ${errorMessage}`);
+            const msg = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`[${taskId}] Error procesando datos: ${msg}`);
         }
     }
 
@@ -475,5 +527,9 @@ export class ExtractorService implements OnModuleInit {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Error al obtener tareas programadas: ${errorMessage}`);
         }
+    }
+
+    getQueueStatus() {
+        return this.extractionQueue.getStatus();
     }
 }
