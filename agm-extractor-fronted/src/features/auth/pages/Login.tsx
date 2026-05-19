@@ -114,7 +114,7 @@ export default function Login() {
                                         <Lock size={14} className="text-slate-400" />
                                         Contraseña
                                     </label>
-                                    <a href="#" className="text-xs text-blue-600 hover:underline">¿Olvidaste tu contraseña?</a>
+                                    <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">¿Olvidaste tu contraseña?</Link>
                                 </div>
                                 <Input
                                     type="password"
