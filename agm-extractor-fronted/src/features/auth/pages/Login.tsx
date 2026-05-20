@@ -45,10 +45,10 @@ export default function Login() {
             {/* Visual Side */}
             <div className="hidden md:flex md:w-1/2 bg-slate-900 items-center justify-center p-12 text-white relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                   <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
-                   <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
                 </div>
-                
+
                 <div className="relative z-10 max-w-lg">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
@@ -63,7 +63,7 @@ export default function Login() {
                         Extracción automática de procesos, seguimiento en tiempo real y análisis avanzado para profesionales del derecho.
                     </p>
                 </div>
-                
+
                 <div className="absolute bottom-12 left-12 right-12 text-slate-500 text-sm flex justify-between border-t border-slate-800 pt-8">
                     <span>© 2026 AGM RADAR</span>
                     <span>Versión 1.0.0</span>
@@ -75,9 +75,9 @@ export default function Login() {
                 <Card className="w-full max-w-md border-none shadow-none bg-transparent md:bg-white md:border md:shadow-sm">
                     <CardHeader className="space-y-1 text-center md:text-left">
                         <div className="md:hidden flex justify-center mb-6">
-                           <div className="p-2 bg-blue-600 rounded-lg">
-                               <Scale size={24} className="text-white" />
-                           </div>
+                            <div className="p-2 bg-blue-600 rounded-lg">
+                                <Scale size={24} className="text-white" />
+                            </div>
                         </div>
                         <CardTitle className="text-3xl font-bold tracking-tight">Bienvenido</CardTitle>
                         <CardDescription>
@@ -126,8 +126,8 @@ export default function Login() {
                                 />
                             </div>
 
-                            <Button 
-                                type="submit" 
+                            <Button
+                                type="submit"
                                 className="w-full h-11 text-base font-semibold transition-all hover:scale-[1.01]"
                                 disabled={isLoading}
                             >
@@ -143,9 +143,9 @@ export default function Login() {
                         </form>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-4 text-center">
-                        <p className="text-sm text-slate-500">
+                        {/* <p className="text-sm text-slate-500">
                             ¿No tienes una cuenta? <Link to="/register" className="text-blue-600 font-semibold hover:underline">Regístrate</Link>
-                        </p>
+                        </p> */}
                     </CardFooter>
                 </Card>
             </div>
