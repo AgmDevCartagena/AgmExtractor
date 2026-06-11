@@ -1,18 +1,16 @@
 import { useState } from 'react';
-import { useTareasProgramadas, useCancelarTarea } from '../hooks/useTask';
-import { Radar, ChevronLeft, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useTareasRadicado, useCancelarRadicado } from '../hooks/useRadicado';
+import { ChevronLeft, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ScheduledTask } from '../hooks/useTask';
+import type { RadicadoTask } from '../hooks/useRadicado';
 
-interface ListaTareasProps {
+interface ListaTareasRadicadoProps {
   userId: string | undefined;
   tareaSeleccionada: string | null;
   onSelectTarea: (id: string | null, hasRun?: boolean) => void;
-  onNuevoRadar?: () => void;
 }
 
-function TareaSkeleton() {
+function RadicadoSkeleton() {
   return (
     <div className="px-3 py-2.5 animate-pulse space-y-1.5">
       <div className="h-3.5 bg-muted rounded w-3/4" />
@@ -21,20 +19,17 @@ function TareaSkeleton() {
   );
 }
 
-function TareaRow({
+function RadicadoRow({
   tarea,
   isSelected,
   onSelect,
   onDelete,
 }: {
-  tarea: ScheduledTask;
+  tarea: RadicadoTask;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: (e: React.MouseEvent) => void;
 }) {
-  const partes = Array.isArray(tarea.parteProcesal)
-    ? tarea.parteProcesal.join(', ')
-    : tarea.parteProcesal;
   const hasRun = tarea.ultimaEjecucion != null;
 
   return (
@@ -55,10 +50,10 @@ function TareaRow({
 
       <div className="flex-1 min-w-0">
         <p
-          className={`text-[13px] font-medium truncate leading-tight ${isSelected ? 'text-accent-foreground' : 'text-foreground'}`}
-          title={partes}
+          className={`text-[13px] font-medium font-mono truncate leading-tight ${isSelected ? 'text-accent-foreground' : 'text-foreground'}`}
+          title={tarea.radicado}
         >
-          {partes}
+          {tarea.radicado}
         </p>
         <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
           {tarea.juzgado}
@@ -79,25 +74,21 @@ function TareaRow({
   );
 }
 
-export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, onNuevoRadar }: ListaTareasProps) {
+export default function ListaTareasRadicado({ userId, tareaSeleccionada, onSelectTarea }: ListaTareasRadicadoProps) {
   const [page, setPage] = useState(1);
   const limit = 8;
-  const queryClient = useQueryClient();
 
-  const { data: response, isLoading, isError } = useTareasProgramadas(userId || null, page, limit);
-  const cancelarMutation = useCancelarTarea();
+  const { data: response, isLoading, isError } = useTareasRadicado(userId || null, page, limit);
+  const cancelarMutation = useCancelarRadicado();
 
-  const handleEliminarTarea = (e: React.MouseEvent, id: string) => {
+  const handleEliminar = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
 
-    if (window.confirm('Estas seguro de que deseas detener y eliminar este radar?')) {
+    if (window.confirm('Estas seguro de que deseas detener este radar de radicado?')) {
       const loadingToast = toast.loading('Eliminando radar...');
       cancelarMutation.mutate(id, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
-          if (tareaSeleccionada === id) {
-            onSelectTarea(null);
-          }
+          if (tareaSeleccionada === id) onSelectTarea(null);
           toast.success('Radar eliminado correctamente', { id: loadingToast });
         },
         onError: (error) => {
@@ -110,9 +101,9 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
   if (!userId) return null;
 
   const sectionHeader = (
-    <div className="px-4 pt-3 pb-1.5">
+    <div className="px-4 pt-3 pb-1.5 border-t">
       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-        Por parte procesal
+        Por radicado
       </p>
     </div>
   );
@@ -122,9 +113,8 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
       <div>
         {sectionHeader}
         <div className="px-1 pb-2">
-          <TareaSkeleton />
-          <TareaSkeleton />
-          <TareaSkeleton />
+          <RadicadoSkeleton />
+          <RadicadoSkeleton />
         </div>
       </div>
     );
@@ -136,13 +126,7 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
         {sectionHeader}
         <div className="px-4 py-6 text-center">
           <AlertCircle className="mx-auto text-destructive mb-2" size={20} />
-          <p className="text-[13px] font-medium text-destructive">Error al sincronizar radares</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-1.5 text-xs text-destructive underline underline-offset-2"
-          >
-            Reintentar
-          </button>
+          <p className="text-[13px] font-medium text-destructive">Error al sincronizar radares de radicado</p>
         </div>
       </div>
     );
@@ -151,39 +135,19 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
   const tareas = response?.data || [];
   const meta = response?.meta;
 
-  if (tareas.length === 0) {
-    return (
-      <div className="px-4 py-10 text-center">
-        <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
-          <Radar size={18} className="text-muted-foreground/60" />
-        </div>
-        <p className="text-[13px] font-medium text-foreground mb-1">Sin radares activos</p>
-        <p className="text-xs text-muted-foreground leading-relaxed max-w-[220px] mx-auto">
-          Crea tu primer radar para comenzar el monitoreo automatico de procesos.
-        </p>
-        {onNuevoRadar && (
-          <button
-            onClick={onNuevoRadar}
-            className="mt-3 text-[13px] font-medium text-primary hover:text-primary/80 transition-colors"
-          >
-            Crear primer radar
-          </button>
-        )}
-      </div>
-    );
-  }
+  if (tareas.length === 0) return null;
 
   return (
     <div>
       {sectionHeader}
-      <div className="px-1.5 pb-2 space-y-0.5 max-h-[400px] overflow-y-auto custom-scrollbar">
+      <div className="px-1.5 pb-2 space-y-0.5 max-h-[300px] overflow-y-auto custom-scrollbar">
         {tareas.map((tarea) => (
-          <TareaRow
+          <RadicadoRow
             key={tarea.id}
             tarea={tarea}
             isSelected={tareaSeleccionada === tarea.id}
             onSelect={() => onSelectTarea(tarea.id, tarea.ultimaEjecucion != null)}
-            onDelete={(e) => handleEliminarTarea(e, tarea.id)}
+            onDelete={(e) => handleEliminar(e, tarea.id)}
           />
         ))}
       </div>

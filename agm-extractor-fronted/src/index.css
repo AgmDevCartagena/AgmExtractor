@@ -1,6 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 @theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -28,6 +31,9 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
 
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -35,59 +41,139 @@
 
 @layer base {
   :root {
-    --background: #ffffff;
-    --foreground: #020817;
+    --background: #fafafa;
+    --foreground: #18181b;
     --card: #ffffff;
-    --card-foreground: #020817;
+    --card-foreground: #18181b;
     --popover: #ffffff;
-    --popover-foreground: #020817;
-    --primary: #0f172a;
-    --primary-foreground: #f8fafc;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #f1f5f9;
-    --accent-foreground: #0f172a;
-    --destructive: #ef4444;
-    --destructive-foreground: #f8fafc;
-    --border: #e2e8f0;
-    --input: #e2e8f0;
-    --ring: #020817;
+    --popover-foreground: #18181b;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #27272a;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --accent: #eff6ff;
+    --accent-foreground: #1d4ed8;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+    --success: #16a34a;
+    --warning: #d97706;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
+    --ring: #2563eb;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: #020817;
-    --foreground: #f8fafc;
-    --card: #020817;
-    --card-foreground: #f8fafc;
-    --popover: #020817;
-    --popover-foreground: #f8fafc;
-    --primary: #f8fafc;
-    --primary-foreground: #0f172a;
-    --secondary: #1e293b;
-    --secondary-foreground: #f8fafc;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
+    --background: #09090b;
+    --foreground: #fafafa;
+    --card: #18181b;
+    --card-foreground: #fafafa;
+    --popover: #18181b;
+    --popover-foreground: #fafafa;
+    --primary: #3b82f6;
+    --primary-foreground: #fafafa;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #1e3a5f;
+    --accent-foreground: #93c5fd;
     --destructive: #7f1d1d;
-    --destructive-foreground: #f8fafc;
-    --border: #1e293b;
-    --input: #1e293b;
-    --ring: #cbd5e1;
+    --destructive-foreground: #fafafa;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #3b82f6;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 5px;
+    height: 5px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+    background: var(--border);
+    border-radius: 999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  .animate-in {
+    animation: animate-in 0.2s ease-out;
+  }
+
+  @keyframes animate-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-modal-in {
+    animation: modal-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes modal-in {
+    from {
+      opacity: 0;
+      transform: scale(0.98) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.15s ease-out;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
   }
 }

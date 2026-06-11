@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { requestPasswordReset } from '../../../lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Particles from 'react-tsparticles';
+import { loadSlim } from 'tsparticles-slim';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Mail, Scale, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
@@ -38,15 +40,19 @@ export default function ForgotPassword() {
         }
     };
 
+    const particlesInit = useCallback(async (engine: any) => {
+        await loadSlim(engine);
+    }, []);
+
     return (
         <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
             {/* Visual Side */}
             <div className="hidden md:flex md:w-1/2 bg-slate-900 items-center justify-center p-12 text-white relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                   <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
-                   <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
                 </div>
-                
+
                 <div className="relative z-10 max-w-lg">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
@@ -61,7 +67,7 @@ export default function ForgotPassword() {
                         Ingresa tu correo electrónico y te enviaremos las instrucciones para restablecer tu contraseña de forma segura.
                     </p>
                 </div>
-                
+
                 <div className="absolute bottom-12 left-12 right-12 text-slate-500 text-sm flex justify-between border-t border-slate-800 pt-8">
                     <span>© 2026 AGM RADAR</span>
                     <span>Versión 1.0.0</span>
@@ -69,18 +75,65 @@ export default function ForgotPassword() {
             </div>
 
             {/* Form Side */}
-            <div className="flex-1 flex items-center justify-center p-6 md:p-12">
-                <Card className="w-full max-w-md border-none shadow-none bg-transparent md:bg-white md:border md:shadow-sm">
+            <div className="lg:w-1/2 max-lg:w-full flex items-center justify-center p-6 sm:p-12 relative overflow-hidden bg-background">
+                <Particles
+                    id="tsparticles"
+                    init={particlesInit}
+                    className="absolute inset-0 z-0 pointer-events-none"
+                    options={{
+                        background: { color: { value: "transparent" } },
+                        fpsLimit: 120,
+                        fullScreen: { enable: false },
+                        interactivity: {
+                            events: {
+                                onHover: { enable: false },
+                                onClick: { enable: false },
+                                resize: true,
+                            },
+                        },
+                        particles: {
+                            number: {
+                                density: { enable: true, width: 900, height: 900 },
+                                value: 55,
+                            },
+                            color: { value: "#155dfc" },
+                            shape: { type: "circle" },
+                            opacity: { value: 0.6 },
+                            size: { value: 2.8 },
+                            links: {
+                                enable: true,
+                                distance: 130,
+                                color: { value: "#155dfc" },
+                                opacity: 0.4,
+                                width: 1,
+                            },
+                            move: {
+                                enable: true,
+                                speed: 0.9,
+                                direction: 0,
+                                random: true,
+                                straight: false,
+                            },
+                            paint: {
+                                fill: {
+                                    color: { value: "#155dfc" },
+                                }
+                            }
+                        },
+                        detectRetina: true,
+                    }}
+                />
+                <Card className="w-full max-w-md border-none shadow-none bg-transparent z-30">
                     <CardHeader className="space-y-1 text-center md:text-left">
                         <div className="md:hidden flex justify-center mb-6">
-                           <div className="p-2 bg-blue-600 rounded-lg">
-                               <Scale size={24} className="text-white" />
-                           </div>
+                            <div className="p-2 bg-blue-600 rounded-lg">
+                                <Scale size={24} className="text-white" />
+                            </div>
                         </div>
                         <CardTitle className="text-3xl font-bold tracking-tight">Recuperar contraseña</CardTitle>
                         <CardDescription>
-                            {isSuccess 
-                                ? "Revisa tu bandeja de entrada." 
+                            {isSuccess
+                                ? "Revisa tu bandeja de entrada."
                                 : "Ingresa tu correo para recibir un enlace de recuperación."}
                         </CardDescription>
                     </CardHeader>
@@ -107,7 +160,7 @@ export default function ForgotPassword() {
                                         Si no lo recibes en unos minutos, revisa tu carpeta de spam.
                                     </p>
                                 </div>
-                                <Button 
+                                <Button
                                     onClick={() => navigate('/login')}
                                     className="w-full h-11"
                                 >
@@ -127,12 +180,12 @@ export default function ForgotPassword() {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         required
-                                        className="bg-white"
+                                        className="h-11 rounded-lg border-gray-200 bg-white focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                 </div>
 
-                                <Button 
-                                    type="submit" 
+                                <Button
+                                    type="submit"
                                     className="w-full h-11 text-base font-semibold transition-all hover:scale-[1.01]"
                                     disabled={isLoading}
                                 >

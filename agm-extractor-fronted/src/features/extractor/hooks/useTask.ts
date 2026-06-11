@@ -10,12 +10,46 @@ export interface ScheduleParamsDto {
 }
 
 export interface ProcesoJudicial {
+    id: string;
     radicado: string;
     tipoProceso: string;
     ponente: string;
     demandante: string;
     textoCompleto: string;
-    fechaDescubrimiento: string,
+    fechaDescubrimiento: string;
+    detalleExtraido: boolean;
+}
+
+export interface Actuacion {
+    id: string;
+    indice: string | null;
+    fechaRegistro: string | null;
+    fechaActuacion: string | null;
+    actuacion: string | null;
+    anotacion: string | null;
+    estado: string | null;
+    anexos: number;
+}
+
+export interface ProcesoDetalle extends ProcesoJudicial {
+    corporacion: string | null;
+    clase: string | null;
+    subclase: string | null;
+    marcoLegal: string | null;
+    vigente: boolean | null;
+    salaConoce: string | null;
+    salaDecide: string | null;
+    fechaRadicado: string | null;
+    fechaPresentacion: string | null;
+    sentencia: string | null;
+    asunto: string | null;
+    origen: string | null;
+    recurso: string | null;
+    naturaleza: string | null;
+    ubicacion: string | null;
+    etapa: string | null;
+    formatoExpediente: string | null;
+    actuaciones: Actuacion[];
 }
 
 export interface ScheduledTask {
@@ -24,6 +58,7 @@ export interface ScheduledTask {
     juzgado: string;
     frecuencia: FrecuenciaPermitida;
     createdAt: string;
+    ultimaEjecucion: string | null;
 }
 
 
@@ -83,3 +118,11 @@ export const useTareasProgramadas = (userId: string | null, page = 1, limit = 10
         refetchInterval: userId ? 15000 : false,
     })
 }
+
+export const useDetalleProceso = (procesoId: string | null) =>
+    useQuery<ProcesoDetalle>({
+        queryKey: ['detalleProceso', procesoId],
+        queryFn: () => apiFetch(`/extractor/proceso/${procesoId}`),
+        enabled: !!procesoId,
+        staleTime: 5 * 60 * 1000,
+    });

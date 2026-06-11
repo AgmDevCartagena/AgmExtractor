@@ -14,4 +14,7 @@ export class PaginationQueryDto {
 
     @IsOptional()
     taskId?: string;
+
+    @IsOptional()
+    radicadoTaskId?: string;
 }

@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signIn } from '../../../lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Particles from 'react-tsparticles';
+import { loadSlim } from 'tsparticles-slim';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Lock, Mail, Scale } from 'lucide-react';
 
@@ -40,6 +42,10 @@ export default function Login() {
         }
     };
 
+    const particlesInit = useCallback(async (engine: any) => {
+        await loadSlim(engine);
+    }, []);
+
     return (
         <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
             {/* Visual Side */}
@@ -59,20 +65,67 @@ export default function Login() {
                     <h2 className="text-5xl font-bold mb-6 leading-tight">
                         Optimiza tu gestión jurídica con <span className="text-blue-400">inteligencia</span>.
                     </h2>
-                    <p className="text-slate-400 text-lg leading-relaxed">
+                    <p className="text-gray-400 text-lg leading-relaxed">
                         Extracción automática de procesos, seguimiento en tiempo real y análisis avanzado para profesionales del derecho.
                     </p>
                 </div>
 
-                <div className="absolute bottom-12 left-12 right-12 text-slate-500 text-sm flex justify-between border-t border-slate-800 pt-8">
-                    <span>© 2026 AGM RADAR</span>
+                <div className="absolute bottom-12 left-12 right-12 text-white-500 text-sm flex justify-between border-t border-white-800 pt-8">
+                    <span>© 2026 AGM DESARROLLOS</span>
                     <span>Versión 1.0.0</span>
                 </div>
             </div>
 
             {/* Form Side */}
-            <div className="flex-1 flex items-center justify-center p-6 md:p-12">
-                <Card className="w-full max-w-md border-none shadow-none bg-transparent md:bg-white md:border md:shadow-sm">
+            <div className="lg:w-1/2 max-lg:w-full flex items-center justify-center p-6 sm:p-12 relative overflow-hidden bg-background">
+                <Particles
+                    id="tsparticles"
+                    init={particlesInit}
+                    className="absolute inset-0 z-0 pointer-events-none"
+                    options={{
+                        background: { color: { value: "transparent" } },
+                        fpsLimit: 120,
+                        fullScreen: { enable: false },
+                        interactivity: {
+                            events: {
+                                onHover: { enable: false },
+                                onClick: { enable: false },
+                                resize: true,
+                            },
+                        },
+                        particles: {
+                            number: {
+                                density: { enable: true, width: 900, height: 900 },
+                                value: 55,
+                            },
+                            color: { value: "#155dfc" },
+                            shape: { type: "circle" },
+                            opacity: { value: 0.6 },
+                            size: { value: 2.8 },
+                            links: {
+                                enable: true,
+                                distance: 130,
+                                color: { value: "#155dfc" },
+                                opacity: 0.4,
+                                width: 1,
+                            },
+                            move: {
+                                enable: true,
+                                speed: 0.9,
+                                direction: 0,
+                                random: true,
+                                straight: false,
+                            },
+                            paint: {
+                                fill: {
+                                    color: { value: "#155dfc" },
+                                }
+                            }
+                        },
+                        detectRetina: true,
+                    }}
+                />
+                <Card className="w-full max-w-md border-none shadow-none bg-transparent z-30">
                     <CardHeader className="space-y-1 text-center md:text-left">
                         <div className="md:hidden flex justify-center mb-6">
                             <div className="p-2 bg-blue-600 rounded-lg">
@@ -104,7 +157,7 @@ export default function Login() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     required
-                                    className="bg-white"
+                                    className="h-11 rounded-lg border-gray-200 bg-white focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                             </div>
 
@@ -122,7 +175,7 @@ export default function Login() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
-                                    className="bg-white"
+                                    className="h-11 rounded-lg border-gray-200 bg-white focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                             </div>
 

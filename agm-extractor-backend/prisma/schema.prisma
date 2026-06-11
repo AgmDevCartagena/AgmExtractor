@@ -21,9 +21,10 @@ model User {
   estado        Boolean @default(true)
   telefono      String?
 
-  tareas   TareaProgramada[]
-  accounts Account[]
-  sessions Session[]
+  tareas         TareaProgramada[]
+  tareasRadicado TareaProgramadaRadicado[]
+  accounts       Account[]
+  sessions       Session[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -79,20 +80,21 @@ model Verification {
 }
 
 model TareaProgramada {
-  id            String  @id @default(uuid())
+  id            String   @id @default(uuid())
   parteProcesal String[]
   juzgado       String
   frecuencia    String
-  activa        Boolean @default(true)
+  activa        Boolean  @default(true)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   procesos ProcesosJudiciales[]
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  ultimaEjecucion DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
   @@map("tareas_programadas")
 }
@@ -107,12 +109,78 @@ model ProcesosJudiciales {
   textoCompleto       String?
   fechaDescubrimiento DateTime @default(now())
 
-  tareaProgramadaId String
-  tareaProgramada   TareaProgramada @relation(fields: [tareaProgramadaId], references: [id], onDelete: Cascade)
+  // DETALLES 
+
+  corporacion       String?
+  clase             String?
+  subclase          String?
+  marcoLegal        String?
+  vigente           Boolean?
+  salaConoce        String?
+  salaDecide        String?
+  fechaRadicado     DateTime?
+  fechaPresentacion DateTime?
+  sentencia         String?
+  asunto            String?
+  origen            String?
+  recurso           String?
+  naturaleza        String?
+  ubicacion         String?
+  etapa             String?
+  formatoExpediente String?
+  detalleExtraido   Boolean   @default(false)
+
+  tareaProgramadaId String?
+  tareaProgramada   TareaProgramada? @relation(fields: [tareaProgramadaId], references: [id], onDelete: SetNull)
+
+  tareaProgramadaRadicadoId String?
+  tareaProgramadaRadicado   TareaProgramadaRadicado? @relation(fields: [tareaProgramadaRadicadoId], references: [id], onDelete: SetNull)
+
+  actuaciones Actuacion[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@map("procesos_judiciales")
+}
+
+model Actuacion {
+  id             String    @id @default(uuid())
+  fechaRegistro  DateTime?
+  fechaActuacion DateTime?
+  actuacion      String?
+  anotacion      String?
+  estado         String?
+  anexos         Int       @default(0)
+  indice         String?
+
+  procesoId String
+  proceso   ProcesosJudiciales @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([procesoId, indice])
+  @@map("actuaciones")
+}
+
+model TareaProgramadaRadicado {
+  id         String  @id @default(uuid())
+  radicado   String
+  juzgado    String
+  frecuencia String
+  activa     Boolean @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  procesos ProcesosJudiciales[]
+
+  ultimaEjecucion DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([userId, radicado])
+  @@map("tareas_programadas_radicado")
 }

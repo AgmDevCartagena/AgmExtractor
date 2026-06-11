@@ -1,6 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ProcesosJudiciales, TareaProgramada } from '@prisma/client';
+import { ProcesosJudiciales, TareaProgramada, TareaProgramadaRadicado } from '@prisma/client';
 
+
+interface N8nRadicadoWebhookPayload {
+    telefono: string;
+    cantidad: number;
+    radicado: string;
+    juzgado: string;
+    fecha: string;
+    procesos: Array<{
+        radicado: string;
+        tipoProceso: string | null;
+        demandante: string | null;
+    }>;
+}
 
 interface N8nWebhookPayload {
     telefono: string;
@@ -55,6 +68,40 @@ export class NotificationsService {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Falló la conexión con n8n: ${errorMessage}`);
+        }
+    }
+
+    async sendRadicadoNotification(newProcess: any[], radicadoTask: TareaProgramadaRadicado, telefonoUsuario: string) {
+        if (!newProcess || newProcess.length === 0) return;
+
+        const payload: N8nRadicadoWebhookPayload = {
+            telefono: telefonoUsuario,
+            cantidad: newProcess.length,
+            radicado: radicadoTask.radicado,
+            juzgado: radicadoTask.juzgado,
+            fecha: new Date().toLocaleDateString('es-CO'),
+            procesos: newProcess.map(proc => ({
+                radicado: proc.radicado,
+                tipoProceso: proc.tipoProceso,
+                demandante: proc.demandante,
+            })),
+        };
+
+        try {
+            const response = await fetch(this.webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                this.logger.error(`Failed to send radicado notification. Status: ${response.status}`);
+            }
+
+            this.logger.log(`Radicado notification sent for ${newProcess.length} processes.`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Falló la conexión con n8n (radicado): ${errorMessage}`);
         }
     }
 }
