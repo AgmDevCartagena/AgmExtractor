@@ -78,7 +78,7 @@ export default function Dashboard() {
               variant="ghost"
               size="sm"
               onClick={handleCerrarSesion}
-              className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+              className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 cursor-pointer"
             >
               <LogOut size={14} />
               <span className="hidden sm:inline">Cerrar sesion</span>
@@ -93,7 +93,7 @@ export default function Dashboard() {
             <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground tracking-tight">Radares</h2>
-                <Button onClick={abrirModal} size="sm" className="h-8 gap-1.5 text-[13px] font-medium">
+                <Button onClick={abrirModal} size="sm" className="h-8 gap-1.5 text-[13px] font-medium cursor-pointer">
                   <Plus size={14} />
                   Nuevo
                 </Button>
@@ -156,7 +156,7 @@ export default function Dashboard() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-full h-8 w-8 shrink-0"
+                className="rounded-full h-8 w-8 shrink-0 cursor-pointer"
               >
                 <X size={16} />
               </Button>

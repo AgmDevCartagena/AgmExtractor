@@ -158,15 +158,15 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
           <Radar size={18} className="text-muted-foreground/60" />
         </div>
         <p className="text-[13px] font-medium text-foreground mb-1">Sin radares activos</p>
-        <p className="text-xs text-muted-foreground leading-relaxed max-w-[220px] mx-auto">
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-55 mx-auto">
           Crea tu primer radar para comenzar el monitoreo automatico de procesos.
         </p>
         {onNuevoRadar && (
           <button
             onClick={onNuevoRadar}
-            className="mt-3 text-[13px] font-medium text-primary hover:text-primary/80 transition-colors"
+            className="mt-3 text-[13px] font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer"
           >
-            Crear primer radar
+            Crear mi primer radar
           </button>
         )}
       </div>
@@ -176,7 +176,7 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
   return (
     <div>
       {sectionHeader}
-      <div className="px-1.5 pb-2 space-y-0.5 max-h-[400px] overflow-y-auto custom-scrollbar">
+      <div className="px-1.5 pb-2 space-y-0.5 max-h-100 overflow-y-auto custom-scrollbar">
         {tareas.map((tarea) => (
           <TareaRow
             key={tarea.id}

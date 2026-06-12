@@ -417,7 +417,7 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
           descripcion="Selecciona un radar de la lista para ver sus procesos, o crea uno nuevo para comenzar el monitoreo."
         >
           {onNuevoRadar && (
-            <Button size="sm" onClick={onNuevoRadar} className="mt-4 gap-1.5">
+            <Button size="sm" onClick={onNuevoRadar} className="mt-4 gap-1.5 cursor-pointer">
               <Plus size={14} />
               Nuevo Radar
             </Button>
