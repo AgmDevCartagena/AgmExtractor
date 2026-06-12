@@ -71,7 +71,7 @@ export default function Login() {
                 </div>
 
                 <div className="absolute bottom-12 left-12 right-12 text-white-500 text-sm flex justify-between border-t border-white-800 pt-8">
-                    <span>© 2026 AGM DESARROLLOS</span>
+                    <span>© 2026 INNOVAR</span>
                     <span>Versión 1.0.0</span>
                 </div>
             </div>
