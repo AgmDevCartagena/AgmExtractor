@@ -7,13 +7,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { LogOut, Radar, Plus, X, ShieldCheck } from 'lucide-react';
+import { LogOut, Radar, Plus, X, ShieldCheck, LayoutDashboard, List } from 'lucide-react';
 
 type ActiveMode = 'task' | 'radicado';
 
 export default function Dashboard() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'admin';
   const navigate = useNavigate();
 
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -44,6 +45,15 @@ export default function Dashboard() {
     setSelectedTaskId(null);
     setSelectedTaskHasRun(hasRun ?? false);
     setActiveMode('radicado');
+  };
+
+  const haySeleccion = selectedTaskId !== null || selectedRadicadoTaskId !== null;
+
+  const handleDeseleccionar = () => {
+    setSelectedTaskId(null);
+    setSelectedRadicadoTaskId(null);
+    setSelectedTaskHasRun(false);
+    setActiveMode('task');
   };
 
   const handleCerrarSesion = async () => {
@@ -79,6 +89,18 @@ export default function Dashboard() {
 
             <ThemeToggle />
 
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/admin')}
+                className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer"
+              >
+                <LayoutDashboard size={14} />
+                <span className="hidden sm:inline">Admin</span>
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="sm"
@@ -108,10 +130,24 @@ export default function Dashboard() {
             <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground tracking-tight">Radares</h2>
-                <Button onClick={abrirModal} size="sm" className="h-8 gap-1.5 text-[13px] font-medium cursor-pointer">
-                  <Plus size={14} />
-                  Nuevo
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  {haySeleccion && (
+                    <Button
+                      onClick={handleDeseleccionar}
+                      variant="ghost"
+                      size="sm"
+                      title="Ver resultados de todos los radares"
+                      className="h-8 gap-1.5 text-[13px] text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer"
+                    >
+                      <List size={14} />
+                      Ver todos
+                    </Button>
+                  )}
+                  <Button onClick={abrirModal} size="sm" className="h-8 gap-1.5 text-[13px] font-medium cursor-pointer">
+                    <Plus size={14} />
+                    Nuevo
+                  </Button>
+                </div>
               </div>
 
               <ListaTareas

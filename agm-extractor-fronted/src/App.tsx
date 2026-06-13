@@ -6,6 +6,11 @@ import ResetPassword from './features/auth/pages/ResetPassword';
 import TwoFactorVerify from './features/auth/pages/TwoFactorVerify';
 import SecuritySettings from './features/account/pages/SecuritySettings';
 import Dashboard from './features/extractor/pages/Dashboard';
+import AdminLayout from './features/admin/components/AdminLayout';
+import AdminOverview from './features/admin/pages/AdminOverview';
+import AdminUsers from './features/admin/pages/AdminUsers';
+import AdminAudit from './features/admin/pages/AdminAudit';
+import AdminExecutions from './features/admin/pages/AdminExecutions';
 import { useSession } from './lib/auth-client';
 import { Radar } from 'lucide-react';
 
@@ -37,6 +42,16 @@ export default function App() {
             ) : (
                 <>
                     <Route path="/cuenta/seguridad" element={<SecuritySettings />} />
+                    {(session.user as { role?: string }).role === 'admin' ? (
+                        <Route path="/admin" element={<AdminLayout />}>
+                            <Route index element={<AdminOverview />} />
+                            <Route path="usuarios" element={<AdminUsers />} />
+                            <Route path="auditoria" element={<AdminAudit />} />
+                            <Route path="ejecuciones" element={<AdminExecutions />} />
+                        </Route>
+                    ) : (
+                        <Route path="/admin/*" element={<Navigate to="/" replace />} />
+                    )}
                     <Route path="*" element={<Dashboard />} />
                 </>
             )}
