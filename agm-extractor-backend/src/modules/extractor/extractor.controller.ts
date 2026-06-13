@@ -1,5 +1,4 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
-import { ExtractorService } from './extractor.service';
 import { ScheduleParamsDto } from './dto/schedule-params.dto';
 import { ScheduleRadicadoDto } from './dto/schedule-radicado.dto';
 import { SearchRadicadoDto } from './dto/search-radicado.dto';
@@ -8,11 +7,16 @@ import { Throttle } from '@nestjs/throttler';
 import { PaginationQueryDto } from './dto/paginate-query.dto';
 import { anonymous } from 'better-auth/plugins';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { SamaiScraperService } from './samai-scraper.service';
+import { ExtractorSchedulerService } from './extractor-scheduler.service';
+import { ExtractorQueryService } from './extractor-query.service';
 
 @Controller('extractor')
 export class ExtractorController {
     constructor(
-        private readonly extractorService: ExtractorService
+        private readonly scraper: SamaiScraperService,
+        private readonly scheduler: ExtractorSchedulerService,
+        private readonly query: ExtractorQueryService,
     ) { }
 
     @Post('schedule')
@@ -21,7 +25,7 @@ export class ExtractorController {
         @Body() body: ScheduleParamsDto,
         @CurrentUser() user: { id: string }
     ) {
-        return this.extractorService.scheduleExtraction(body, user.id);
+        return this.scheduler.scheduleExtraction(body, user.id);
     }
 
     @Delete('schedule/:jobId')
@@ -30,7 +34,7 @@ export class ExtractorController {
         @Param('jobId') jobId: string,
         @CurrentUser() user: { id: string }
     ) {
-        return this.extractorService.stopScheduledExtraction(jobId, user.id);
+        return this.scheduler.stopScheduledExtraction(jobId, user.id);
     }
 
     @Get('schedule')
@@ -39,7 +43,7 @@ export class ExtractorController {
         @CurrentUser() user: { id: string },
         @Query() pagination: PaginationQueryDto,
     ) {
-        return this.extractorService.getDataForScheduledTask(pagination, user.id);
+        return this.query.getDataForScheduledTask(pagination, user.id);
     }
 
     @Get('schedule/tasks/:userId')
@@ -48,14 +52,14 @@ export class ExtractorController {
         @Param('userId') userId: string,
         @Query() pagination: PaginationQueryDto
     ) {
-        return this.extractorService.getScheduledTasks(pagination, userId);
+        return this.query.getScheduledTasks(pagination, userId);
     }
 
     @Get('queue/status')
     @AllowAnonymous()
     @Throttle({ default: { limit: 100, ttl: 70000 } })
     getQueueStatus() {
-        return this.extractorService.getQueueStatus();
+        return this.scheduler.getQueueStatus();
     }
 
     // --- Radicado endpoints ---
@@ -65,7 +69,7 @@ export class ExtractorController {
     searchByRadicado(
         @Body() body: SearchRadicadoDto,
     ) {
-        return this.extractorService.searchRadicado(body);
+        return this.scraper.searchRadicado(body);
     }
 
     @Post('radicado/schedule')
@@ -74,7 +78,7 @@ export class ExtractorController {
         @Body() body: ScheduleRadicadoDto,
         @CurrentUser() user: { id: string }
     ) {
-        return this.extractorService.scheduleRadicadoExtraction(body, user.id);
+        return this.scheduler.scheduleRadicadoExtraction(body, user.id);
     }
 
     @Get('radicado/schedule/tasks')
@@ -83,7 +87,7 @@ export class ExtractorController {
         @CurrentUser() user: { id: string },
         @Query() pagination: PaginationQueryDto
     ) {
-        return this.extractorService.getRadicadoTasks(pagination, user.id);
+        return this.query.getRadicadoTasks(pagination, user.id);
     }
 
     @Get('radicado/schedule')
@@ -92,7 +96,7 @@ export class ExtractorController {
         @CurrentUser() user: { id: string },
         @Query() pagination: PaginationQueryDto
     ) {
-        return this.extractorService.getDataForRadicadoTask(pagination, user.id);
+        return this.query.getDataForRadicadoTask(pagination, user.id);
     }
 
     @Delete('radicado/schedule/:jobId')
@@ -101,7 +105,7 @@ export class ExtractorController {
         @Param('jobId') jobId: string,
         @CurrentUser() user: { id: string }
     ) {
-        return this.extractorService.stopRadicadoExtraction(jobId, user.id);
+        return this.scheduler.stopRadicadoExtraction(jobId, user.id);
     }
 
     @Get('proceso/:id')
@@ -110,6 +114,6 @@ export class ExtractorController {
         @Param('id') id: string,
         @CurrentUser() user: { id: string }
     ) {
-        return this.extractorService.getProcesoDetalle(id, user.id);
+        return this.query.getProcesoDetalle(id, user.id);
     }
 }

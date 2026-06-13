@@ -182,7 +182,7 @@ function DetailModal({
           <div className="inline-flex bg-muted rounded-lg p-0.5 gap-0.5">
             <button
               onClick={() => setTabActiva('detalle')}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all cursor-pointer ${
                 tabActiva === 'detalle'
                   ? 'bg-background shadow-sm text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -192,7 +192,7 @@ function DetailModal({
             </button>
             <button
               onClick={() => setTabActiva('actuaciones')}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                 tabActiva === 'actuaciones'
                   ? 'bg-background shadow-sm text-foreground'
                   : 'text-muted-foreground hover:text-foreground'

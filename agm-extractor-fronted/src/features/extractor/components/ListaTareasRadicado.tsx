@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTareasRadicado, useCancelarRadicado } from '../hooks/useRadicado';
 import { ChevronLeft, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { RadicadoTask } from '../hooks/useRadicado';
 
 interface ListaTareasRadicadoProps {
@@ -76,6 +77,7 @@ function RadicadoRow({
 
 export default function ListaTareasRadicado({ userId, tareaSeleccionada, onSelectTarea }: ListaTareasRadicadoProps) {
   const [page, setPage] = useState(1);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const limit = 8;
 
   const { data: response, isLoading, isError } = useTareasRadicado(userId || null, page, limit);
@@ -83,20 +85,36 @@ export default function ListaTareasRadicado({ userId, tareaSeleccionada, onSelec
 
   const handleEliminar = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-
-    if (window.confirm('Estas seguro de que deseas detener este radar de radicado?')) {
-      const loadingToast = toast.loading('Eliminando radar...');
-      cancelarMutation.mutate(id, {
-        onSuccess: () => {
-          if (tareaSeleccionada === id) onSelectTarea(null);
-          toast.success('Radar eliminado correctamente', { id: loadingToast });
-        },
-        onError: (error) => {
-          toast.error(error.message || 'Error al eliminar el radar', { id: loadingToast });
-        },
-      });
-    }
+    setConfirmId(id);
   };
+
+  const confirmarEliminacion = () => {
+    if (!confirmId) return;
+    const id = confirmId;
+    setConfirmId(null);
+    const loadingToast = toast.loading('Eliminando radar...');
+    cancelarMutation.mutate(id, {
+      onSuccess: () => {
+        if (tareaSeleccionada === id) onSelectTarea(null);
+        toast.success('Radar eliminado correctamente', { id: loadingToast });
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Error al eliminar el radar', { id: loadingToast });
+      },
+    });
+  };
+
+  const confirmDialog = (
+    <ConfirmDialog
+      open={confirmId !== null}
+      destructive
+      title="Eliminar radar de radicado"
+      description="Se detendra el monitoreo automatico y se eliminara este radar de forma permanente."
+      confirmText="Eliminar"
+      onConfirm={confirmarEliminacion}
+      onCancel={() => setConfirmId(null)}
+    />
+  );
 
   if (!userId) return null;
 
@@ -173,6 +191,7 @@ export default function ListaTareasRadicado({ userId, tareaSeleccionada, onSelec
           </button>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
