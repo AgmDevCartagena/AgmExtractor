@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input';
 import Particles from 'react-tsparticles';
 import { loadSlim } from 'tsparticles-slim';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Lock, Mail, Radar } from 'lucide-react';
+import { AlertCircle, Lock, AtSign, Radar } from 'lucide-react';
 
 export default function Login() {
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -22,13 +22,20 @@ export default function Login() {
         setError('');
 
         try {
-            const { data, error: authError } = await signIn.email({
-                email,
-                password,
-            });
+            // El identificador puede ser correo o usuario: si contiene '@' lo tratamos como email.
+            const isEmail = identifier.includes('@');
+            const { data, error: authError } = isEmail
+                ? await signIn.email({ email: identifier.trim(), password })
+                : await signIn.username({ username: identifier.trim().toLowerCase(), password });
 
             if (authError) {
                 setError(authError.message || 'Credenciales incorrectas');
+                return;
+            }
+
+            // Con 2FA activo no se crea la sesión aquí: hay que verificar el código primero.
+            if ((data as { twoFactorRedirect?: boolean })?.twoFactorRedirect) {
+                navigate('/login/2fa');
                 return;
             }
 
@@ -148,14 +155,14 @@ export default function Login() {
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
-                                    <Mail size={14} className="text-slate-400" />
-                                    Correo Electrónico
+                                    <AtSign size={14} className="text-slate-400" />
+                                    Correo o usuario
                                 </label>
                                 <Input
-                                    type="email"
-                                    placeholder="nombre@empresa.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    type="text"
+                                    placeholder="nombre@empresa.com o tu usuario"
+                                    value={identifier}
+                                    onChange={(e) => setIdentifier(e.target.value)}
                                     required
                                     className="h-11 rounded-lg border-gray-200 bg-white text-gray-900 focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />

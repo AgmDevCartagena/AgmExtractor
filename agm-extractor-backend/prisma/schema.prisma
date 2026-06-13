@@ -12,25 +12,41 @@ datasource db {
 }
 
 model User {
-  id            String  @id @default(uuid())
-  email         String  @unique
-  nombre        String
-  contraseña   String?
-  emailVerified Boolean @default(false)
-  image         String?
-  estado        Boolean @default(true)
-  telefono      String?
+  id               String  @id @default(uuid())
+  email            String  @unique
+  nombre           String
+  contraseña      String?
+  emailVerified    Boolean @default(false)
+  image            String?
+  estado           Boolean @default(true)
+  telefono         String?
+  username         String? @unique
+  displayUsername  String?
+  twoFactorEnabled Boolean @default(false)
 
   tareas         TareaProgramada[]
   tareasRadicado TareaProgramadaRadicado[]
   accounts       Account[]
   sessions       Session[]
+  twofactors     TwoFactor[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@map("users")
+}
+
+model TwoFactor {
+  id          String  @id @default(uuid())
+  secret      String
+  backupCodes String
+  verified    Boolean @default(false)
+  userId      String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("two_factors")
 }
 
 model Account {
