@@ -3,6 +3,7 @@ import { useTareasProgramadas, useCancelarTarea } from '../hooks/useTask';
 import { Radar, ChevronLeft, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { ScheduledTask } from '../hooks/useTask';
 
 interface ListaTareasProps {
@@ -81,6 +82,7 @@ function TareaRow({
 
 export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, onNuevoRadar }: ListaTareasProps) {
   const [page, setPage] = useState(1);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const limit = 8;
   const queryClient = useQueryClient();
 
@@ -89,23 +91,39 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
 
   const handleEliminarTarea = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-
-    if (window.confirm('Estas seguro de que deseas detener y eliminar este radar?')) {
-      const loadingToast = toast.loading('Eliminando radar...');
-      cancelarMutation.mutate(id, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
-          if (tareaSeleccionada === id) {
-            onSelectTarea(null);
-          }
-          toast.success('Radar eliminado correctamente', { id: loadingToast });
-        },
-        onError: (error) => {
-          toast.error(error.message || 'Error al eliminar el radar', { id: loadingToast });
-        },
-      });
-    }
+    setConfirmId(id);
   };
+
+  const confirmarEliminacion = () => {
+    if (!confirmId) return;
+    const id = confirmId;
+    setConfirmId(null);
+    const loadingToast = toast.loading('Eliminando radar...');
+    cancelarMutation.mutate(id, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
+        if (tareaSeleccionada === id) {
+          onSelectTarea(null);
+        }
+        toast.success('Radar eliminado correctamente', { id: loadingToast });
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Error al eliminar el radar', { id: loadingToast });
+      },
+    });
+  };
+
+  const confirmDialog = (
+    <ConfirmDialog
+      open={confirmId !== null}
+      destructive
+      title="Eliminar radar"
+      description="Se detendra el monitoreo automatico y se eliminara este radar de forma permanente."
+      confirmText="Eliminar"
+      onConfirm={confirmarEliminacion}
+      onCancel={() => setConfirmId(null)}
+    />
+  );
 
   if (!userId) return null;
 
@@ -209,6 +227,7 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
           </button>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

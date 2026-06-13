@@ -5,7 +5,8 @@ import ListaTareas from '../components/ListTask';
 import ListaTareasRadicado from '../components/ListaTareasRadicado';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { LogOut, Scale, Plus, X } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { LogOut, Radar, Plus, X } from 'lucide-react';
 
 type ActiveMode = 'task' | 'radicado';
 
@@ -55,8 +56,8 @@ export default function Dashboard() {
       <header className="bg-card/80 backdrop-blur-md border-b sticky top-0 z-30">
         <div className="max-w-400 mx-auto px-6 h-14 flex justify-between items-center w-full">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-primary rounded-md">
-              <Scale size={15} className="text-primary-foreground" />
+            <div className="p-1.5 bg-primary rounded-md ring-1 ring-primary/30 shadow-sm">
+              <Radar size={15} className="text-primary-foreground" />
             </div>
             <h1 className="text-sm font-semibold text-foreground tracking-tight">RADAR</h1>
           </div>
@@ -73,6 +74,8 @@ export default function Dashboard() {
             </div>
 
             <div className="w-px h-5 bg-border hidden sm:block" />
+
+            <ThemeToggle />
 
             <Button
               variant="ghost"

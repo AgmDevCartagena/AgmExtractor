@@ -5,16 +5,18 @@ import ForgotPassword from './features/auth/pages/ForgotPassword';
 import ResetPassword from './features/auth/pages/ResetPassword';
 import Dashboard from './features/extractor/pages/Dashboard';
 import { useSession } from './lib/auth-client';
+import { Radar } from 'lucide-react';
 
 export default function App() {
     const { data: session, isPending } = useSession();
 
     if (isPending) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-blue-600 font-bold text-xl animate-pulse">
-                    Cargando Radar...
-                </div>
+            <div className="min-h-dvh flex flex-col items-center justify-center gap-3 bg-background">
+                <Radar size={28} className="text-primary animate-pulse-soft" />
+                <p className="text-sm font-medium text-muted-foreground tracking-tight">
+                    Cargando RADAR...
+                </p>
             </div>
         );
     }

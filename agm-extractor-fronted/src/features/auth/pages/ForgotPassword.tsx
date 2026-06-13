@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import Particles from 'react-tsparticles';
 import { loadSlim } from 'tsparticles-slim';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Mail, Scale, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Mail, Radar, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState('');
@@ -49,19 +49,19 @@ export default function ForgotPassword() {
             {/* Visual Side */}
             <div className="hidden md:flex md:w-1/2 bg-slate-900 items-center justify-center p-12 text-white relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
-                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-teal-500 rounded-full blur-[120px]"></div>
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500 rounded-full blur-[120px]"></div>
                 </div>
 
                 <div className="relative z-10 max-w-lg">
                     <div className="flex items-center gap-3 mb-8">
-                        <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
-                            <Scale size={32} />
+                        <div className="p-3 bg-teal-600 rounded-xl shadow-lg shadow-teal-500/20">
+                            <Radar size={32} />
                         </div>
                         <h1 className="text-4xl font-black tracking-tighter">RADAR</h1>
                     </div>
                     <h2 className="text-5xl font-bold mb-6 leading-tight">
-                        Recupera el <span className="text-blue-400">acceso</span> a tu cuenta.
+                        Recupera el <span className="text-teal-400">acceso</span> a tu cuenta.
                     </h2>
                     <p className="text-slate-400 text-lg leading-relaxed">
                         Ingresa tu correo electrónico y te enviaremos las instrucciones para restablecer tu contraseña de forma segura.
@@ -96,14 +96,14 @@ export default function ForgotPassword() {
                                 density: { enable: true, width: 900, height: 900 },
                                 value: 55,
                             },
-                            color: { value: "#155dfc" },
+                            color: { value: "#0d9488" },
                             shape: { type: "circle" },
                             opacity: { value: 0.6 },
                             size: { value: 2.8 },
                             links: {
                                 enable: true,
                                 distance: 130,
-                                color: { value: "#155dfc" },
+                                color: { value: "#0d9488" },
                                 opacity: 0.4,
                                 width: 1,
                             },
@@ -116,7 +116,7 @@ export default function ForgotPassword() {
                             },
                             paint: {
                                 fill: {
-                                    color: { value: "#155dfc" },
+                                    color: { value: "#0d9488" },
                                 }
                             }
                         },
@@ -126,8 +126,8 @@ export default function ForgotPassword() {
                 <Card className="w-full max-w-md border-none shadow-none bg-transparent z-30">
                     <CardHeader className="space-y-1 text-center md:text-left">
                         <div className="md:hidden flex justify-center mb-6">
-                            <div className="p-2 bg-blue-600 rounded-lg">
-                                <Scale size={24} className="text-white" />
+                            <div className="p-2 bg-teal-600 rounded-lg">
+                                <Radar size={24} className="text-white" />
                             </div>
                         </div>
                         <CardTitle className="text-3xl font-bold tracking-tight">Recuperar contraseña</CardTitle>
@@ -180,7 +180,7 @@ export default function ForgotPassword() {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         required
-                                        className="h-11 rounded-lg border-gray-200 bg-white focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="h-11 rounded-lg border-gray-200 bg-white text-gray-900 focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                 </div>
 
@@ -202,7 +202,7 @@ export default function ForgotPassword() {
                         )}
                     </CardContent>
                     <CardFooter className="flex flex-col gap-4 text-center">
-                        <Link to="/login" className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                        <Link to="/login" className="text-sm text-slate-500 hover:text-primary flex items-center gap-2 transition-colors">
                             <ArrowLeft size={14} />
                             Volver al inicio de sesión
                         </Link>
