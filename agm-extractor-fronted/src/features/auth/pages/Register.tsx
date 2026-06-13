@@ -8,10 +8,11 @@ import { loadSlim } from 'tsparticles-slim';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import { AlertCircle, Lock, Mail, Phone, Radar, User } from 'lucide-react';
+import { AlertCircle, AtSign, Lock, Mail, Phone, Radar, User } from 'lucide-react';
 
 export default function Register() {
     const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [phoneNumber, setPhoneNumber] = useState<string | undefined>();
     const [password, setPassword] = useState('');
@@ -42,6 +43,13 @@ export default function Register() {
             return;
         }
 
+        const finalUsername = username.trim().toLowerCase();
+        if (!/^[a-z0-9._-]{3,}$/.test(finalUsername)) {
+            setError('El usuario debe tener al menos 3 caracteres y solo letras, números, puntos, guiones o guion bajo.');
+            setIsLoading(false);
+            return;
+        }
+
         const finalPhoneNumber = phoneNumber?.replace('+', '') ?? '';
 
         try {
@@ -49,6 +57,7 @@ export default function Register() {
                 email,
                 password,
                 name,
+                username: finalUsername,
                 // @ts-expect-error: Better Auth frontend no conoce los campos adicionales del backend
                 telefono: finalPhoneNumber,
             });
@@ -239,6 +248,23 @@ export default function Register() {
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     required
+                                    className="h-11 rounded-lg border-gray-200 bg-white text-gray-900 focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                    <AtSign size={14} className="text-slate-400" />
+                                    Usuario
+                                </label>
+                                <Input
+                                    type="text"
+                                    placeholder="juanperez"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    required
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
                                     className="h-11 rounded-lg border-gray-200 bg-white text-gray-900 focus-visible:border-primary focus-visible:ring-primary/10 text-[14px] px-3.5 placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                             </div>

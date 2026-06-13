@@ -4,15 +4,17 @@ import TablaResultados from '../components/TableResult';
 import ListaTareas from '../components/ListTask';
 import ListaTareasRadicado from '../components/ListaTareasRadicado';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { LogOut, Radar, Plus, X } from 'lucide-react';
+import { LogOut, Radar, Plus, X, ShieldCheck } from 'lucide-react';
 
 type ActiveMode = 'task' | 'radicado';
 
 export default function Dashboard() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
+  const navigate = useNavigate();
 
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -76,6 +78,16 @@ export default function Dashboard() {
             <div className="w-px h-5 bg-border hidden sm:block" />
 
             <ThemeToggle />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/cuenta/seguridad')}
+              className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer"
+            >
+              <ShieldCheck size={14} />
+              <span className="hidden sm:inline">Seguridad</span>
+            </Button>
 
             <Button
               variant="ghost"
