@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ExtractorService } from './extractor.service';
 import { ExtractorController } from './extractor.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { BrowserManager } from './browser.manager';
 import { ExtractionQueue } from './extractor.queue';
+import { SamaiScraperService } from './samai-scraper.service';
+import { ExtractorSchedulerService } from './extractor-scheduler.service';
+import { ExtractorQueryService } from './extractor-query.service';
 
 @Module({
   imports: [
@@ -12,7 +14,9 @@ import { ExtractionQueue } from './extractor.queue';
     NotificationsModule
   ],
   providers: [
-    ExtractorService,
+    SamaiScraperService,
+    ExtractorSchedulerService,
+    ExtractorQueryService,
     BrowserManager,
     ExtractionQueue
   ],
