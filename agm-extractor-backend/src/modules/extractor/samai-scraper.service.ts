@@ -7,6 +7,7 @@ import { SearchRadicadoDto } from './dto/search-radicado.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications/notifications.service';
 import { BrowserManager } from './browser.manager';
+import { ExecutionLogService } from '../tracking/execution-log.service';
 
 @Injectable()
 export class SamaiScraperService {
@@ -17,6 +18,7 @@ export class SamaiScraperService {
         private readonly prisma: PrismaService,
         private readonly notificationsService: NotificationsService,
         private readonly browserManager: BrowserManager,
+        private readonly executionLog: ExecutionLogService,
     ) {
         if (!fs.existsSync(this.dataDirectory)) {
             fs.mkdirSync(this.dataDirectory, { recursive: true });
@@ -25,6 +27,11 @@ export class SamaiScraperService {
 
     async extractData(taskId: string, partesProcesales: string[], juzgado: string): Promise<any[]> {
         this.logger.log(`Iniciando extracción — tarea [${taskId}] | partes: ${partesProcesales.length} | juzgado: ${juzgado}`);
+
+        const execId = await this.executionLog.start({ tipo: 'programada', refId: taskId });
+        let execStatus: 'SUCCESS' | 'FAILED' = 'SUCCESS';
+        let execError: string | null = null;
+        let procesosCount = 0;
 
         const page = await this.browserManager.newPage();
 
@@ -189,15 +196,23 @@ export class SamaiScraperService {
                 }).catch(err => this.logger.error(`[${taskId}] Error actualizando ultimaEjecucion: ${err?.message}`));
             }
 
+            procesosCount = todosLosResultados.length;
             return todosLosResultados;
 
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Error desconocido';
             const stack = error instanceof Error ? error.stack : '';
             this.logger.error(`[${taskId}] Fallo en scraping: ${msg}`, stack);
+            execStatus = 'FAILED';
+            execError = msg;
             throw new Error(`Fallo en el scraping: ${msg}`);
         } finally {
             await page.close();
+            await this.executionLog.finish(execId, {
+                status: execStatus,
+                procesosEncontrados: procesosCount,
+                error: execError,
+            });
         }
     }
 
@@ -328,6 +343,11 @@ export class SamaiScraperService {
         persist: boolean
     ): Promise<any[]> {
         this.logger.log(`Iniciando extracción por radicado — radicado: ${radicado} | juzgado: ${juzgado}`);
+
+        const execId = await this.executionLog.start({ tipo: 'radicado', refId: taskId ?? radicado });
+        let execStatus: 'SUCCESS' | 'FAILED' = 'SUCCESS';
+        let execError: string | null = null;
+        let procesosCount = 0;
 
         const page = await this.browserManager.newPage();
 
@@ -482,14 +502,22 @@ export class SamaiScraperService {
                 }).catch(err => this.logger.error(`[radicado:${taskId}] Error actualizando ultimaEjecucion: ${err?.message}`));
             }
 
+            procesosCount = resultados.length;
             return resultados;
 
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Fallo en scraping por radicado: ${msg}`);
+            execStatus = 'FAILED';
+            execError = msg;
             throw new Error(`Fallo en el scraping: ${msg}`);
         } finally {
             await page.close();
+            await this.executionLog.finish(execId, {
+                status: execStatus,
+                procesosEncontrados: procesosCount,
+                error: execError,
+            });
         }
     }
 

@@ -8,6 +8,8 @@ import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { NotificationsModule } from './modules/extractor/notifications/notifications.module';
+import { TrackingModule } from './modules/tracking/tracking.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { NotificationsModule } from './modules/extractor/notifications/notificat
       auth
     }),
     PrismaModule,
+    TrackingModule,
+    AdminModule,
     ThrottlerModule.forRoot([{
       ttl: 60000,
       limit: 10,

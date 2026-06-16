@@ -1,9 +1,9 @@
 import { createAuthClient } from "better-auth/react";
-import { usernameClient, twoFactorClient } from "better-auth/client/plugins";
+import { usernameClient, twoFactorClient, adminClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
     baseURL: import.meta.env.VITE_CLIENT_URL,
-    plugins: [usernameClient(), twoFactorClient()],
+    plugins: [usernameClient(), twoFactorClient(), adminClient()],
 });
 
 export const {
@@ -14,4 +14,5 @@ export const {
     requestPasswordReset,
     resetPassword,
     twoFactor,
+    admin,
 } = authClient;

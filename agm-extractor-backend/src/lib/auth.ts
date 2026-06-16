@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { username, twoFactor } from 'better-auth/plugins';
+import { username, twoFactor, admin } from 'better-auth/plugins';
+import { createAuthMiddleware, APIError } from 'better-auth/api';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -104,7 +105,108 @@ export const auth = betterAuth({
     plugins: [
         username(),
         twoFactor({ issuer: 'RADAR' }),
+        admin({
+            adminUserIds: (process.env.ADMIN_USER_IDS ?? '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+        }),
     ],
 
-    hooks: {},
+    hooks: {
+        // Bloqueo de login para usuarios desactivados (estado === false).
+        before: createAuthMiddleware(async (ctx) => {
+            if (ctx.path === '/sign-in/email' || ctx.path === '/sign-in/username') {
+                const email = ctx.body?.email as string | undefined;
+                const uname = ctx.body?.username as string | undefined;
+                if (!email && !uname) return;
+
+                const usuario = await prisma.user.findFirst({
+                    where: email ? { email } : { username: uname },
+                    select: { estado: true },
+                });
+
+                if (usuario && usuario.estado === false) {
+                    throw new APIError('FORBIDDEN', {
+                        message: 'Tu cuenta está desactivada. Contacta al administrador.',
+                    });
+                }
+            }
+        }),
+
+        // Auditoría: login, logout y acciones del plugin admin.
+        after: createAuthMiddleware(async (ctx) => {
+            try {
+                const headers = ctx.headers;
+                const userAgent = headers?.get('user-agent') ?? null;
+                const ipAddress =
+                    headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+                    headers?.get('x-real-ip') ??
+                    null;
+
+                const loginPaths = [
+                    '/sign-in/email',
+                    '/sign-in/username',
+                    '/two-factor/verify-totp',
+                    '/two-factor/verify-backup-code',
+                ];
+
+                // LOGIN
+                if (loginPaths.includes(ctx.path) && ctx.context.newSession) {
+                    await prisma.auditLog.create({
+                        data: {
+                            accion: 'LOGIN',
+                            usuarioId: ctx.context.newSession.user.id,
+                            ipAddress,
+                            userAgent,
+                        },
+                    });
+                    return;
+                }
+
+                // LOGOUT
+                if (ctx.path === '/sign-out') {
+                    await prisma.auditLog.create({
+                        data: {
+                            accion: 'LOGOUT',
+                            usuarioId: ctx.context.session?.user?.id ?? null,
+                            ipAddress,
+                            userAgent,
+                        },
+                    });
+                    return;
+                }
+
+                // Acciones del plugin admin (/admin/ban-user, /admin/set-role, ...)
+                if (ctx.path.startsWith('/admin/')) {
+                    const accionMap: Record<string, string> = {
+                        '/admin/ban-user': 'USER_BANNED',
+                        '/admin/unban-user': 'USER_UNBANNED',
+                        '/admin/set-role': 'ROLE_CHANGED',
+                        '/admin/remove-user': 'USER_DELETED',
+                        '/admin/set-user-password': 'PASSWORD_RESET',
+                        '/admin/create-user': 'USER_CREATED',
+                    };
+                    const accion = accionMap[ctx.path];
+                    if (!accion) return; // ignorar list-users y similares
+
+                    await prisma.auditLog.create({
+                        data: {
+                            accion,
+                            usuarioId: ctx.context.session?.user?.id ?? null,
+                            targetUserId: (ctx.body?.userId as string | undefined) ?? null,
+                            ipAddress,
+                            userAgent,
+                            metadata: {
+                                role: ctx.body?.role ?? undefined,
+                                banReason: ctx.body?.banReason ?? undefined,
+                            },
+                        },
+                    });
+                }
+            } catch {
+                // La auditoría nunca debe romper el flujo de autenticación.
+            }
+        }),
+    },
 });
