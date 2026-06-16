@@ -27,6 +27,20 @@ interface N8nWebhookPayload {
         demandante: string | null;
     }>;
 }
+
+interface N8nActuacionWebhookPayload {
+    telefono: string;
+    radicado: string;
+    juzgado: string;
+    cantidad: number;
+    fecha: string;
+    actuaciones: Array<{
+        fechaActuacion: string | null;
+        actuacion: string | null;
+        anotacion: string | null;
+        estado: string | null;
+    }>;
+}
 @Injectable()
 export class NotificationsService {
     private readonly logger = new Logger(NotificationsService.name);
@@ -102,6 +116,46 @@ export class NotificationsService {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Falló la conexión con n8n (radicado): ${errorMessage}`);
+        }
+    }
+
+    async sendActuacionNotification(
+        radicado: string,
+        juzgado: string,
+        nuevasActuaciones: any[],
+        telefonoUsuario: string,
+    ) {
+        if (!nuevasActuaciones || nuevasActuaciones.length === 0) return;
+
+        const payload: N8nActuacionWebhookPayload = {
+            telefono: telefonoUsuario,
+            radicado,
+            juzgado,
+            cantidad: nuevasActuaciones.length,
+            fecha: new Date().toLocaleDateString('es-CO'),
+            actuaciones: nuevasActuaciones.map(act => ({
+                fechaActuacion: act.fechaActuacion ?? null,
+                actuacion: act.actuacion ?? null,
+                anotacion: act.anotacion ?? null,
+                estado: act.estado ?? null,
+            })),
+        };
+
+        try {
+            const response = await fetch(this.webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                this.logger.error(`Failed to send actuacion notification. Status: ${response.status}`);
+            }
+
+            this.logger.log(`Actuacion notification sent for ${nuevasActuaciones.length} actuaciones (radicado ${radicado}).`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Falló la conexión con n8n (actuacion): ${errorMessage}`);
         }
     }
 }

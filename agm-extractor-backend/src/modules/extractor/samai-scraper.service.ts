@@ -1,189 +1,25 @@
-import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as ExcelJS from 'exceljs';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ScheduleParamsDto } from './dto/schedule-params.dto';
-import { ScheduleRadicadoDto } from './dto/schedule-radicado.dto';
 import { SearchRadicadoDto } from './dto/search-radicado.dto';
-import { SchedulerRegistry } from '@nestjs/schedule';
-import { CronJob } from 'cron';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaginationQueryDto } from './dto/paginate-query.dto';
 import { NotificationsService } from './notifications/notifications.service';
 import { BrowserManager } from './browser.manager';
-import { ExtractionQueue } from './extractor.queue';
-
 
 @Injectable()
-export class ExtractorService implements OnModuleInit {
-    private readonly logger = new Logger(ExtractorService.name);
+export class SamaiScraperService {
+    private readonly logger = new Logger(SamaiScraperService.name);
     private readonly dataDirectory = path.join(process.cwd(), 'data');
 
     constructor(
-        private schedulerRegistry: SchedulerRegistry,
         private readonly prisma: PrismaService,
         private readonly notificationsService: NotificationsService,
         private readonly browserManager: BrowserManager,
-        private readonly extractionQueue: ExtractionQueue
     ) {
         if (!fs.existsSync(this.dataDirectory)) {
             fs.mkdirSync(this.dataDirectory, { recursive: true });
-        }
-    }
-
-    async onModuleInit() {
-        try {
-            const tasks = await this.prisma.tareaProgramada.findMany({
-                where: { activa: true }
-            })
-
-            if (tasks.length === 0) {
-                this.logger.log(`No hay tareas para restaurar`);
-                return
-            }
-
-            for (const task of tasks) {
-                const cronExpression = this.translateFrecuency(task.frecuencia);
-                if (!cronExpression) {
-                    this.logger.warn(`Frecuencia no válida para la tarea ${task.id}, omitiendo restauración.`);
-                    continue;
-                }
-
-                const nameJob = task.id;
-
-                const job = new CronJob(cronExpression, async () => {
-                    this.logger.log(`Ejecutando tarea programadas`);
-                    try {
-                        await this.extractData(task.id, task.parteProcesal, task.juzgado);
-                    } catch (error) {
-                        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-                        this.logger.error(`Error en tarea programada para el usuario ${task.userId}: ${errorMessage}`);
-                    }
-                })
-
-                this.schedulerRegistry.addCronJob(nameJob, job);
-                job.start();
-            }
-
-            this.logger.log(`Tareas programadas restauradas: ${tasks.length}`);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al restaurar tareas programadas: ${errorMessage}`);
-        }
-
-        try {
-            const radicadoTasks = await this.prisma.tareaProgramadaRadicado.findMany({
-                where: { activa: true }
-            });
-
-            for (const task of radicadoTasks) {
-                const cronExpression = this.translateFrecuency(task.frecuencia);
-                if (!cronExpression) {
-                    this.logger.warn(`Frecuencia no válida para radicado tarea ${task.id}, omitiendo.`);
-                    continue;
-                }
-
-                const job = new CronJob(cronExpression, async () => {
-                    try {
-                        await this.extractDataByRadicado(task.id, task.radicado, task.juzgado, true);
-                    } catch (error) {
-                        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-                        this.logger.error(`Error en tarea radicado [${task.id}]: ${errorMessage}`);
-                    }
-                });
-
-                this.schedulerRegistry.addCronJob(`radicado_${task.id}`, job);
-                job.start();
-            }
-
-            this.logger.log(`Tareas de radicado restauradas: ${radicadoTasks.length}`);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al restaurar tareas de radicado: ${errorMessage}`);
-        }
-    }
-
-    private translateFrecuency(frecuency: string): string {
-        const mapaCron: Record<string, string> = {
-            '3min': '*/3 * * * *',
-            '15min': '*/15 * * * *',
-            '30min': '*/30 * * * *',
-            '1h': '0 * * * *',
-            '12h': '0 */12 * * *',
-            '1d': '0 0 * * *',
-            '2d': '0 0 */2 * *',
-            '3d': '0 0 */3 * *',
-        };
-        return mapaCron[frecuency];
-    }
-
-    async scheduleExtraction(params: ScheduleParamsDto, userId: string) {
-        const { frecuencia, parteProcesal: partesProcesales, juzgado } = params;
-
-        const cronExpression = this.translateFrecuency(frecuencia);
-        if (!cronExpression) {
-            throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
-        }
-
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user) throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
-
-        const newTask = await this.prisma.tareaProgramada.create({
-            data: { userId, frecuencia, parteProcesal: partesProcesales, juzgado },
-        });
-
-        const job = new CronJob(cronExpression, () => {
-            this.extractionQueue.enqueue(newTask.id, () =>
-                this.extractData(newTask.id, partesProcesales, juzgado)
-            ).catch(err =>
-                this.logger.error(`Error en tarea [${newTask.id}]: ${err?.message}`)
-            );
-        });
-
-        this.schedulerRegistry.addCronJob(newTask.id, job);
-        job.start();
-
-        // Primera corrida inmediata en background
-        this.extractionQueue.enqueue(newTask.id, () =>
-            this.extractData(newTask.id, partesProcesales, juzgado)
-        ).catch(err => this.logger.error(`Error en primera corrida [${newTask.id}]: ${err?.message}`));
-
-        this.logger.log(`Tarea [${newTask.id}] creada para usuario ${userId} con frecuencia ${frecuencia}`);
-
-        return {
-            message: `Tarea programada creada con éxito`,
-            jobName: newTask.id,
-            frecuencia,
-        };
-    }
-
-    async stopScheduledExtraction(jobId: string, userId: string) {
-        try {
-            const userTask = await this.prisma.tareaProgramada.findFirst({
-                where: { id: jobId, userId },
-            });
-
-            if (!userTask) {
-                throw new HttpException('Tarea no encontrada para este usuario', HttpStatus.NOT_FOUND);
-            }
-
-            const job = this.schedulerRegistry.getCronJob(jobId);
-            job.stop();
-            this.schedulerRegistry.deleteCronJob(jobId);
-
-            await this.prisma.tareaProgramada.update({
-                where: { id: jobId },
-                data: { activa: false, deletedAt: new Date() },
-            });
-
-            this.logger.log(`Tarea [${jobId}] detenida y desactivada.`);
-            return { message: 'Tarea cancelada exitosamente' };
-
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al detener tarea [${jobId}]: ${msg}`);
-            throw new HttpException(`Error al detener tarea: ${msg}`, HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -343,7 +179,7 @@ export class ExtractorService implements OnModuleInit {
 
             if (todosLosResultados.length > 0) {
                 await this.saveDataToDatabase(todosLosResultados, taskId);
-                await this.extractDetailsProcess(page, todosLosResultados, taskId,'parteProcesal');
+                await this.extractDetailsProcess(page, todosLosResultados, taskId, 'parteProcesal');
             }
 
             if (taskId) {
@@ -413,59 +249,6 @@ export class ExtractorService implements OnModuleInit {
         this.logger.log(`Excel actualizado. Archivo en: ${rutaArchivo}`);
     }
 
-    async getDataForScheduledTask(pagination: PaginationQueryDto, userId: string) {
-        const { limit, page, taskId } = pagination;
-        const effectiveLimit = (limit && limit > 0) ? limit : 10;
-        const skip = ((page ?? 1) - 1) * effectiveLimit;
-        try {
-            const whereClause: any = {
-                tareaProgramada: {
-                    userId
-                }
-            }
-
-            if (taskId) {
-                whereClause.tareaProgramada.id = taskId;
-            }
-            const [data, total] = await this.prisma.$transaction([
-                this.prisma.procesosJudiciales.findMany({
-                    where: whereClause,
-                    skip,
-                    take: effectiveLimit,
-                    orderBy: { createdAt: 'desc' }
-                }),
-                this.prisma.procesosJudiciales.count({
-                    where: { tareaProgramada: { userId } }
-                })
-
-            ])
-
-            if (!data || data.length === 0) {
-                return {
-                    data: [],
-                    meta: {
-                        total: 0,
-                        page,
-                        last_page: 0
-                    }
-                }
-            }
-            return {
-                data,
-                meta: {
-                    total,
-                    page,
-                    last_page: Math.ceil(total / effectiveLimit)
-                }
-            };
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al obtener datos para la tarea programada: ${errorMessage}`);
-            throw new HttpException(`Fallo al obtener datos: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR)
-        }
-    }
-
     private async saveDataToDatabase(data: any[], taskId: string) {
         if (!data || data.length === 0) return;
 
@@ -532,51 +315,6 @@ export class ExtractorService implements OnModuleInit {
             const msg = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`[${taskId}] Error procesando datos: ${msg}`);
         }
-    }
-
-    async getScheduledTasks(pagination: PaginationQueryDto, userId: string) {
-        if (!userId) {
-            throw new HttpException('ID de usuario es requerido', HttpStatus.BAD_REQUEST);
-        }
-        const { limit, page } = pagination;
-        const effectiveLimit = (limit && limit > 0) ? limit : 10;
-        const skip = ((page ?? 1) - 1) * effectiveLimit;
-        try {
-            const [tasks, total] = await this.prisma.$transaction([
-                this.prisma.tareaProgramada.findMany({
-                    where: { userId, activa: true },
-                    skip,
-                    take: effectiveLimit,
-                    orderBy: { createdAt: 'desc' },
-                    select: {
-                        id: true,
-                        frecuencia: true,
-                        parteProcesal: true,
-                        juzgado: true,
-                        createdAt: true,
-                        ultimaEjecucion: true,
-                    }
-                }),
-                this.prisma.tareaProgramada.count({
-                    where: { userId, activa: true }
-                })
-            ]);
-            return {
-                data: tasks,
-                meta: {
-                    total,
-                    page,
-                    last_page: Math.ceil(total / effectiveLimit)
-                }
-            };
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al obtener tareas programadas: ${errorMessage}`);
-        }
-    }
-
-    getQueueStatus() {
-        return this.extractionQueue.getStatus();
     }
 
     async searchRadicado(dto: SearchRadicadoDto): Promise<any[]> {
@@ -734,7 +472,7 @@ export class ExtractorService implements OnModuleInit {
 
             if (persist && taskId && resultados.length > 0) {
                 await this.saveRadicadoDataToDatabase(resultados, taskId);
-                await this.extractDetailsProcess(page, resultados, taskId,'radicado');
+                await this.extractDetailsProcess(page, resultados, taskId, 'radicado');
             }
 
             if (persist && taskId) {
@@ -819,198 +557,6 @@ export class ExtractorService implements OnModuleInit {
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`[radicado:${radicadoTaskId}] Error procesando datos: ${msg}`);
-        }
-    }
-
-    async scheduleRadicadoExtraction(params: ScheduleRadicadoDto, userId: string) {
-        const { frecuencia, radicado, juzgado } = params;
-
-        const cronExpression = this.translateFrecuency(frecuencia);
-        if (!cronExpression) {
-            throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
-        }
-
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user) throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
-
-        const existente = await this.prisma.tareaProgramadaRadicado.findUnique({
-            where: { userId_radicado: { userId, radicado } },
-        });
-
-        if (existente && existente.activa) {
-            throw new HttpException('Ya existe un radar activo para este radicado', HttpStatus.CONFLICT);
-        }
-
-        const newTask = await this.prisma.tareaProgramadaRadicado.create({
-            data: { userId, radicado, juzgado, frecuencia },
-        });
-
-        const job = new CronJob(cronExpression, () => {
-            this.extractionQueue.enqueue(`radicado_${newTask.id}`, () =>
-                this.extractDataByRadicado(newTask.id, radicado, juzgado, true)
-            ).catch(err =>
-                this.logger.error(`Error en tarea radicado [${newTask.id}]: ${err?.message}`)
-            );
-        });
-
-        this.schedulerRegistry.addCronJob(`radicado_${newTask.id}`, job);
-        job.start();
-
-        // Primera corrida inmediata en background
-        this.extractionQueue.enqueue(`radicado_${newTask.id}`, () =>
-            this.extractDataByRadicado(newTask.id, radicado, juzgado, true)
-        ).catch(err => this.logger.error(`Error en primera corrida radicado [${newTask.id}]: ${err?.message}`));
-
-        this.logger.log(`Tarea radicado [${newTask.id}] creada para usuario ${userId}`);
-
-        return {
-            message: 'Radar de radicado creado exitosamente',
-            jobName: newTask.id,
-            frecuencia,
-        };
-    }
-
-    async stopRadicadoExtraction(jobId: string, userId: string) {
-        try {
-            const userTask = await this.prisma.tareaProgramadaRadicado.findFirst({
-                where: { id: jobId, userId },
-            });
-
-            if (!userTask) {
-                throw new HttpException('Tarea de radicado no encontrada', HttpStatus.NOT_FOUND);
-            }
-
-            const job = this.schedulerRegistry.getCronJob(`radicado_${jobId}`);
-            job.stop();
-            this.schedulerRegistry.deleteCronJob(`radicado_${jobId}`);
-
-            await this.prisma.tareaProgramadaRadicado.update({
-                where: { id: jobId },
-                data: { activa: false, deletedAt: new Date() },
-            });
-
-            this.logger.log(`Tarea radicado [${jobId}] detenida y desactivada.`);
-            return { message: 'Radar de radicado cancelado exitosamente' };
-
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al detener tarea radicado [${jobId}]: ${msg}`);
-            throw new HttpException(`Error al detener tarea: ${msg}`, HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    async getRadicadoTasks(pagination: PaginationQueryDto, userId: string) {
-        const { limit, page } = pagination;
-        const effectiveLimit = (limit && limit > 0) ? limit : 10;
-        const skip = ((page ?? 1) - 1) * effectiveLimit;
-
-        try {
-            const [tasks, total] = await this.prisma.$transaction([
-                this.prisma.tareaProgramadaRadicado.findMany({
-                    where: { userId, activa: true },
-                    skip,
-                    take: effectiveLimit,
-                    orderBy: { createdAt: 'desc' },
-                    select: {
-                        id: true,
-                        radicado: true,
-                        juzgado: true,
-                        frecuencia: true,
-                        createdAt: true,
-                        ultimaEjecucion: true,
-                    }
-                }),
-                this.prisma.tareaProgramadaRadicado.count({
-                    where: { userId, activa: true }
-                })
-            ]);
-
-            return {
-                data: tasks,
-                meta: {
-                    total,
-                    page,
-                    last_page: Math.ceil(total / effectiveLimit)
-                }
-            };
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al obtener tareas de radicado: ${errorMessage}`);
-            throw new HttpException(`Fallo al obtener tareas: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    async getDataForRadicadoTask(pagination: PaginationQueryDto, userId: string) {
-        const { limit, page, radicadoTaskId } = pagination;
-        const effectiveLimit = (limit && limit > 0) ? limit : 10;
-        const skip = ((page ?? 1) - 1) * effectiveLimit;
-
-        try {
-            const whereClause: any = {
-                tareaProgramadaRadicado: { userId }
-            };
-
-            if (radicadoTaskId) {
-                whereClause.tareaProgramadaRadicadoId = radicadoTaskId;
-            }
-
-            const [data, total] = await this.prisma.$transaction([
-                this.prisma.procesosJudiciales.findMany({
-                    where: whereClause,
-                    skip,
-                    take: effectiveLimit,
-                    orderBy: { createdAt: 'desc' }
-                }),
-                this.prisma.procesosJudiciales.count({
-                    where: whereClause
-                })
-            ]);
-
-            if (!data || data.length === 0) {
-                return {
-                    data: [],
-                    meta: { total: 0, page, last_page: 0 }
-                };
-            }
-
-            return {
-                data,
-                meta: {
-                    total,
-                    page,
-                    last_page: Math.ceil(total / effectiveLimit)
-                }
-            };
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al obtener datos de tarea radicado: ${errorMessage}`);
-            throw new HttpException(`Fallo al obtener datos: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    async getProcesoDetalle(procesoId: string, userId: string) {
-        try {
-            const proceso = await this.prisma.procesosJudiciales.findFirst({
-                where: {
-                    id: procesoId,
-                    OR: [
-                        { tareaProgramada: { userId } },
-                        { tareaProgramadaRadicado: { userId } },
-                    ],
-                },
-                include: {
-                    actuaciones: {
-                        orderBy: { fechaActuacion: 'desc' },
-                    },
-                },
-            });
-            if (!proceso) throw new HttpException('Proceso no encontrado', HttpStatus.NOT_FOUND);
-            return proceso;
-        } catch (error) {
-            if (error instanceof HttpException) throw error;
-            const msg = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al obtener detalle del proceso [${procesoId}]: ${msg}`);
-            throw new HttpException(`Fallo al obtener detalle: ${msg}`, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -1206,7 +752,6 @@ export class ExtractorService implements OnModuleInit {
         }
     }
 
-
     private async saveDetalle(
         radicado: string,
         detalle: Record<string, any>,
@@ -1225,12 +770,36 @@ export class ExtractorService implements OnModuleInit {
 
             const proceso = await this.prisma.procesosJudiciales.findFirst({
                 where: whereClause,
+                include: {
+                    tareaProgramada: { include: { user: true } },
+                    tareaProgramadaRadicado: { include: { user: true } },
+                },
             });
 
             if (!proceso) {
                 this.logger.warn(`[${taskId}] Proceso ${radicado} no encontrado en BD para actualizar.`);
                 return;
             }
+
+            // Datos para notificar actuaciones nuevas
+            const telefono = taskType === 'parteProcesal'
+                ? proceso.tareaProgramada?.user.telefono
+                : proceso.tareaProgramadaRadicado?.user.telefono;
+            const juzgado = taskType === 'parteProcesal'
+                ? proceso.tareaProgramada?.juzgado
+                : proceso.tareaProgramadaRadicado?.juzgado;
+
+            // Capturar antes del update: si el proceso ya tenía detalle, las
+            // actuaciones que aparezcan ahora son movimientos nuevos a notificar.
+            const yaTeniaDetalle = proceso.detalleExtraido;
+
+            // Detectar actuaciones nuevas ANTES del upsert (comparando índices en BD)
+            const actuacionesExistentes = await this.prisma.actuacion.findMany({
+                where: { procesoId: proceso.id },
+                select: { indice: true },
+            });
+            const indicesExistentes = new Set(actuacionesExistentes.map(a => a.indice));
+            const nuevasActuaciones = actuaciones.filter(a => !indicesExistentes.has(a.indice));
 
             // Parsear fechas de forma segura
             const parseDateSamai = (str: string | null): Date | null => {
@@ -1299,15 +868,15 @@ export class ExtractorService implements OnModuleInit {
                     });
                 }
 
-                const actuacionesExistentes = await this.prisma.actuacion.count({
-                    where: { procesoId: proceso.id },
-                })
-
-                const actuacionesNuevas = actuacionesExistentes - actuaciones.length;
-                if (actuacionesNuevas > 0) {
-                    this.logger.log(`[${taskId}] Actuaciones actualizadas para ${radicado}: ${actuacionesNuevas} nuevas.`);
-                    //this.notificationsService.
-                
+                if (yaTeniaDetalle && nuevasActuaciones.length > 0) {
+                    if (telefono) {
+                        this.notificationsService
+                            .sendActuacionNotification(radicado, juzgado ?? '', nuevasActuaciones, telefono)
+                            .catch(err => this.logger.error(`[${taskId}] Error notificando actuaciones de ${radicado}: ${err?.message}`));
+                    } else {
+                        this.logger.warn(`[${taskId}] Proceso ${radicado} con ${nuevasActuaciones.length} actuaciones nuevas pero usuario sin teléfono.`);
+                    }
+                    this.logger.log(`[${taskId}] ${nuevasActuaciones.length} actuaciones nuevas para ${radicado}.`);
                 }
             }
 

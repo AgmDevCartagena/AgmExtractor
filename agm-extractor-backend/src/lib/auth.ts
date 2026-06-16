@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { username, twoFactor } from 'better-auth/plugins';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -20,6 +21,11 @@ export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: 'postgresql',
     }),
+    session: {
+        expiresIn: 60 * 30,
+        updateAge: 60 * 15,
+        freshAge: 60 * 10
+    },
 
     user: {
 
@@ -94,6 +100,11 @@ export const auth = betterAuth({
             });
         },
     },
+
+    plugins: [
+        username(),
+        twoFactor({ issuer: 'RADAR' }),
+    ],
 
     hooks: {},
 });
