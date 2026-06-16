@@ -43,7 +43,16 @@ export const useAdminUsers = (page: number, search: string, limit = 10) =>
                 },
             });
             if (res.error) throw new Error(res.error.message ?? 'Error listando usuarios');
-            return res.data as ListUsersResult;
+            return {
+                ...res.data,
+                users: res.data.users.map((u) => ({
+                    ...u,
+                    createdAt:
+                        u.createdAt instanceof Date
+                            ? u.createdAt.toISOString()
+                            : u.createdAt,
+                })),
+            } as ListUsersResult;
         },
     });
 

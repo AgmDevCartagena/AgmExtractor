@@ -51,7 +51,7 @@ export default function AdminExecutions() {
                     <Summary label="% Éxito" value={`${perf.pctExito}%`} />
                     <Summary label="Duración media" value={fmtMs(perf.duracionMediaMs)} />
                     <Summary label="Procesos/corrida" value={perf.procesosPorCorrida} />
-                    <Summary label="Throughput 24h" value={perf.throughput24h} />
+                    <Summary label="Rendimiento" value={perf.throughput24h} />
                 </div>
             )}
 

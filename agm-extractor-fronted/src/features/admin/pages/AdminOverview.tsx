@@ -14,14 +14,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Users,
-    UserCheck,
-    UserX,
-    Ban,
     ShieldCheck,
     Radar,
-    FileText,
     Activity,
-    Clock,
     Loader2,
 } from 'lucide-react';
 import { useOverview, usePerformance, useTimeseries } from '../hooks/useAdminMetrics';
@@ -101,24 +96,32 @@ export default function AdminOverview() {
                 <p className="text-sm text-muted-foreground">Métricas del sistema en tiempo real.</p>
             </div>
 
-            {/* KPIs usuarios */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                <Kpi icon={Users} label="Usuarios" value={ov.usuarios.total} hint={`${ov.usuarios.nuevos30d} nuevos (30d)`} />
-                <Kpi icon={UserCheck} label="Activos" value={ov.usuarios.activos} />
-                <Kpi icon={UserX} label="Inactivos" value={ov.usuarios.inactivos} />
-                <Kpi icon={Ban} label="Baneados" value={ov.usuarios.baneados} />
-                <Kpi icon={ShieldCheck} label="Con 2FA" value={`${ov.usuarios.pct2FA}%`} hint={`${ov.usuarios.con2FA} usuarios`} />
-                <Kpi icon={Activity} label="Sesiones activas" value={ov.sesiones.activas} />
-                <Kpi icon={Radar} label="Radares activos" value={ov.radares.activos} hint={`${ov.radares.total} en total`} />
-                <Kpi icon={FileText} label="Procesos" value={ov.procesos.total} hint={`${ov.procesos.pctConDetalle}% con detalle`} />
-            </div>
-
-            {/* KPIs ejecuciones */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Kpi icon={Activity} label="Ejecuciones 24h" value={ov.ejecuciones.ult24h} hint={`${ov.ejecuciones.pctExito24h}% éxito`} />
-                <Kpi icon={Activity} label="Ejecuciones 7d" value={ov.ejecuciones.ult7d} hint={`${ov.ejecuciones.pctExito7d}% éxito`} />
-                <Kpi icon={Clock} label="Duración media" value={fmtMs(ov.ejecuciones.duracionMediaMs)} hint="corridas exitosas (7d)" />
-                <Kpi icon={FileText} label="Actuaciones" value={ov.actuaciones.total} />
+            {/* KPIs principales */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Kpi
+                    icon={Users}
+                    label="Usuarios"
+                    value={ov.usuarios.total}
+                    hint={`${ov.usuarios.activos} activos · ${ov.usuarios.baneados} baneados · ${ov.usuarios.nuevos30d} nuevos (30d)`}
+                />
+                <Kpi
+                    icon={ShieldCheck}
+                    label="Seguridad"
+                    value={`${ov.usuarios.pct2FA}% 2FA`}
+                    hint={`${ov.usuarios.con2FA} con 2FA · ${ov.sesiones.activas} sesiones activas`}
+                />
+                <Kpi
+                    icon={Activity}
+                    label="Ejecuciones 24h"
+                    value={ov.ejecuciones.ult24h}
+                    hint={`${ov.ejecuciones.pctExito24h}% éxito · media ${fmtMs(ov.ejecuciones.duracionMediaMs)}`}
+                />
+                <Kpi
+                    icon={Radar}
+                    label="Operación"
+                    value={`${ov.radares.activos} radares`}
+                    hint={`${ov.procesos.total} procesos · ${ov.actuaciones.total} actuaciones`}
+                />
             </div>
 
             {/* Selector de rango */}
