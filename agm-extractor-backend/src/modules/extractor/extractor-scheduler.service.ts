@@ -25,34 +25,33 @@ export class ExtractorSchedulerService implements OnModuleInit {
             })
 
             if (tasks.length === 0) {
-                this.logger.log(`No hay tareas para restaurar`);
-                return
-            }
+                this.logger.log(`No hay tareas programadas (parteProcesal) para restaurar`);
+            } else {
+                for (const task of tasks) {
+                    const cronExpression = this.translateFrecuency(task.frecuencia);
+                    if (!cronExpression) {
+                        this.logger.warn(`Frecuencia no válida para la tarea ${task.id}, omitiendo restauración.`);
+                        continue;
+                    }
 
-            for (const task of tasks) {
-                const cronExpression = this.translateFrecuency(task.frecuencia);
-                if (!cronExpression) {
-                    this.logger.warn(`Frecuencia no válida para la tarea ${task.id}, omitiendo restauración.`);
-                    continue;
+                    const nameJob = task.id;
+
+                    const job = new CronJob(cronExpression, async () => {
+                        this.logger.log(`Ejecutando tarea programadas`);
+                        try {
+                            await this.scraper.extractData(task.id, task.parteProcesal, task.juzgado);
+                        } catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+                            this.logger.error(`Error en tarea programada para el usuario ${task.userId}: ${errorMessage}`);
+                        }
+                    })
+
+                    this.schedulerRegistry.addCronJob(nameJob, job);
+                    job.start();
                 }
 
-                const nameJob = task.id;
-
-                const job = new CronJob(cronExpression, async () => {
-                    this.logger.log(`Ejecutando tarea programadas`);
-                    try {
-                        await this.scraper.extractData(task.id, task.parteProcesal, task.juzgado);
-                    } catch (error) {
-                        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-                        this.logger.error(`Error en tarea programada para el usuario ${task.userId}: ${errorMessage}`);
-                    }
-                })
-
-                this.schedulerRegistry.addCronJob(nameJob, job);
-                job.start();
+                this.logger.log(`Tareas programadas restauradas: ${tasks.length}`);
             }
-
-            this.logger.log(`Tareas programadas restauradas: ${tasks.length}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Error al restaurar tareas programadas: ${errorMessage}`);
