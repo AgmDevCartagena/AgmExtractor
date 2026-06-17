@@ -196,9 +196,14 @@ export class ExtractorSchedulerService implements OnModuleInit {
             throw new HttpException('Ya existe un radar activo para este radicado', HttpStatus.CONFLICT);
         }
 
-        const newTask = await this.prisma.tareaProgramadaRadicado.create({
-            data: { userId, radicado, juzgado, frecuencia },
-        });
+        const newTask = existente 
+            ? await this.prisma.tareaProgramadaRadicado.update({
+                where: { id: existente.id},
+                data: { juzgado, frecuencia, activa: true, deletedAt: null },
+            })
+            : await this.prisma.tareaProgramadaRadicado.create({
+                data: { userId, radicado, juzgado, frecuencia },
+            });
 
         const job = new CronJob(cronExpression, () => {
             this.extractionQueue.enqueue(`radicado_${newTask.id}`, () =>
