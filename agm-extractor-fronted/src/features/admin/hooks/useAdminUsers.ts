@@ -12,6 +12,7 @@ export interface AdminUser {
     banExpires?: string | null;
     estado?: boolean | null;
     telefono?: string | null;
+    empresa?: string | null;
     twoFactorEnabled?: boolean | null;
     createdAt: string;
 }
@@ -63,6 +64,7 @@ export interface CreateUserInput {
     telefono: string;
     username: string;
     role: 'admin' | 'user';
+    empresa?: string;
 }
 
 export const useAdminUserMutations = () => {
@@ -70,13 +72,13 @@ export const useAdminUserMutations = () => {
     const invalidate = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] });
 
     const createUser = useMutation({
-        mutationFn: async ({ name, email, password, telefono, username, role }: CreateUserInput) => {
+        mutationFn: async ({ name, email, password, telefono, username, role, empresa }: CreateUserInput) => {
             const res = await admin.createUser({
                 name,
                 email,
                 password,
                 role,
-                data: { telefono, username, displayUsername: username },
+                data: { telefono, username, displayUsername: username, empresa },
             });
             if (res.error) throw new Error(res.error.message ?? 'Error creando usuario');
             return res.data;

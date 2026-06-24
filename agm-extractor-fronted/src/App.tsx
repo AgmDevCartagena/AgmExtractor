@@ -4,6 +4,7 @@ import Register from './features/auth/pages/Register';
 import ForgotPassword from './features/auth/pages/ForgotPassword';
 import ResetPassword from './features/auth/pages/ResetPassword';
 import TwoFactorVerify from './features/auth/pages/TwoFactorVerify';
+import ForcePasswordChange from './features/auth/pages/ForcePasswordChange';
 import SecuritySettings from './features/account/pages/SecuritySettings';
 import Dashboard from './features/extractor/pages/Dashboard';
 import AdminLayout from './features/admin/components/AdminLayout';
@@ -25,6 +26,18 @@ export default function App() {
                     Cargando RADAR...
                 </p>
             </div>
+        );
+    }
+
+    const mustChangePassword =
+        !!session && Boolean((session.user as { mustChangePassword?: boolean }).mustChangePassword);
+
+    if (mustChangePassword) {
+        return (
+            <Routes>
+                <Route path="/cambiar-contrasena" element={<ForcePasswordChange />} />
+                <Route path="*" element={<Navigate to="/cambiar-contrasena" replace />} />
+            </Routes>
         );
     }
 

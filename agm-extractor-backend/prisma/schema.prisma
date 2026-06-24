@@ -20,6 +20,8 @@ model User {
   image            String?
   estado           Boolean @default(true)
   telefono         String?
+  empresa          String?
+  mustChangePassword Boolean @default(false)
   username         String? @unique
   displayUsername  String?
   twoFactorEnabled Boolean @default(false)

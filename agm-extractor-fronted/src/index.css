@@ -177,3 +177,12 @@
     animation: pulse-soft 2s ease-in-out infinite;
   }
 }
+
+button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input[type="file"]) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }

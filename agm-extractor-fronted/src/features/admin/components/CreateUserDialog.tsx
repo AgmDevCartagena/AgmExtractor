@@ -53,6 +53,7 @@ const emptyForm = {
     name: '',
     username: '',
     email: '',
+    empresa: '',
     telefono: '',
     password: '',
     role: 'user' as 'user' | 'admin',
@@ -94,6 +95,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
                 name: form.name.trim(),
                 username,
                 email: form.email.trim(),
+                empresa: form.empresa.trim() || undefined,
                 telefono: form.telefono.trim().replace('+', ''),
                 password: form.password,
                 role: form.role,
@@ -146,6 +148,9 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
                     <Field label="Email">
                         <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="correo@ejemplo.com" />
                     </Field>
+                    <Field label="Empresa">
+                        <Input value={form.empresa} onChange={(e) => set('empresa', e.target.value)} placeholder="Nombre de la empresa (opcional)" />
+                    </Field>
                     <Field label="Teléfono">
                         <PhoneInput
                             international
@@ -156,8 +161,9 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
                             className="phone-input-admin"
                         />
                     </Field>
-                    <Field label="Contraseña">
+                    <Field label="Contraseña temporal">
                         <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="Mínimo 8 caracteres" />
+                        <p className="text-[11px] text-muted-foreground">El usuario deberá cambiarla en su primer ingreso.</p>
                     </Field>
                     <Field label="Rol">
                         <select

@@ -41,7 +41,18 @@ export const auth = betterAuth({
             telefono: {
                 type: 'string',
                 required: true,
-            }
+            },
+            empresa: {
+                type: 'string',
+                required: false,
+            },
+            // El admin lo asigna; el cliente no puede enviarlo (input: false).
+            mustChangePassword: {
+                type: 'boolean',
+                required: false,
+                defaultValue: false,
+                input: false,
+            },
         },
     },
 
@@ -176,6 +187,26 @@ export const auth = betterAuth({
                     return;
                 }
 
+                // Cambio de contraseña: limpiar el flag de contraseña temporal.
+                if (ctx.path === '/change-password') {
+                    const userId = ctx.context.session?.user?.id ?? null;
+                    if (userId) {
+                        await prisma.user.update({
+                            where: { id: userId },
+                            data: { mustChangePassword: false },
+                        });
+                        await prisma.auditLog.create({
+                            data: {
+                                accion: 'PASSWORD_CHANGED',
+                                usuarioId: userId,
+                                ipAddress,
+                                userAgent,
+                            },
+                        });
+                    }
+                    return;
+                }
+
                 // Acciones del plugin admin (/admin/ban-user, /admin/set-role, ...)
                 if (ctx.path.startsWith('/admin/')) {
                     const accionMap: Record<string, string> = {
@@ -202,6 +233,17 @@ export const auth = betterAuth({
                             },
                         },
                     });
+
+                    // Usuario creado por admin: exigir cambio de contraseña temporal.
+                    if (accion === 'USER_CREATED') {
+                        const email = ctx.body?.email as string | undefined;
+                        if (email) {
+                            await prisma.user.updateMany({
+                                where: { email },
+                                data: { mustChangePassword: true },
+                            });
+                        }
+                    }
                 }
             } catch {
                 // La auditoría nunca debe romper el flujo de autenticación.
