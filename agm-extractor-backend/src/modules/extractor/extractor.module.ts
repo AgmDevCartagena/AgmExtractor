@@ -7,6 +7,7 @@ import { ExtractionQueue } from './extractor.queue';
 import { SamaiScraperService } from './samai-scraper.service';
 import { ExtractorSchedulerService } from './extractor-scheduler.service';
 import { ExtractorQueryService } from './extractor-query.service';
+import { ExtractorExportService } from './extractor-export.service';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ExtractorQueryService } from './extractor-query.service';
     SamaiScraperService,
     ExtractorSchedulerService,
     ExtractorQueryService,
+    ExtractorExportService,
     BrowserManager,
     ExtractionQueue
   ],

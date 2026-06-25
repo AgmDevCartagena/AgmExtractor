@@ -193,6 +193,39 @@ export class ExtractorQueryService {
         }
     }
 
+    async getProcesosUltimaActuacion(userId: string) {
+        try {
+            const procesos = await this.prisma.procesosJudiciales.findMany({
+                where: {
+                    OR: [
+                        { tareaProgramada: { userId } },
+                        { tareaProgramadaRadicado: { userId } },
+                    ],
+                    actuaciones: { some: {} },
+                },
+                select: {
+                    radicado: true,
+                    tipoProceso: true,
+                    demandante: true,
+                    actuaciones: {
+                        orderBy: { fechaActuacion: 'desc' },
+                        take: 1,
+                        select: {
+                            fechaActuacion: true,
+                            actuacion: true,
+                        },
+                    },
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            return procesos;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Error al obtener procesos para exportar última actuación: ${errorMessage}`);
+            throw new HttpException(`Fallo al obtener datos: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     async getProcesoDetalle(procesoId: string, userId: string) {
         try {
             const proceso = await this.prisma.procesosJudiciales.findFirst({
