@@ -207,7 +207,7 @@ export class SamaiScraperService {
             execError = msg;
             throw new Error(`Fallo en el scraping: ${msg}`);
         } finally {
-            await page.close();
+            await this.browserManager.releasePage(page);
             await this.executionLog.finish(execId, {
                 status: execStatus,
                 procesosEncontrados: procesosCount,
@@ -532,7 +532,7 @@ export class SamaiScraperService {
             execError = msg;
             throw new Error(`Fallo en el scraping: ${msg}`);
         } finally {
-            await page.close();
+            await this.browserManager.releasePage(page);
             await this.executionLog.finish(execId, {
                 status: execStatus,
                 procesosEncontrados: procesosCount,

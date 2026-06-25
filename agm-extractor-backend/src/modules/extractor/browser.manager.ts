@@ -6,8 +6,12 @@ export class BrowserManager implements OnModuleDestroy {
     private readonly logger = new Logger(BrowserManager.name);
     private browser: puppeteer.Browser | null = null;
     private useCount = 0;
+    private activeContexts = 0;
     private isLaunching = false;
     private launchPromise: Promise<puppeteer.Browser> | null = null;
+
+    // Relación página → contexto aislado, para poder cerrar el contexto al liberar.
+    private readonly contextByPage = new WeakMap<puppeteer.Page, puppeteer.BrowserContext>();
 
     // Recicla el browser cada N usos para evitar memory leaks acumulados
     private readonly RECYCLE_AFTER = 15;
@@ -26,7 +30,7 @@ export class BrowserManager implements OnModuleDestroy {
         '--mute-audio',
         '--no-first-run',
         '--safebrowsing-disable-auto-update',
-        '--js-flags=--max-old-space-size=256',
+        '--js-flags=--max-old-space-size=512',
     ];
 
     async getBrowser(): Promise<puppeteer.Browser> {
@@ -34,10 +38,12 @@ export class BrowserManager implements OnModuleDestroy {
             return this.launchPromise;
         }
 
+        // Solo se recicla cuando NO hay contextos en vuelo, para nunca cerrar
+        // el navegador con tareas activas (evita Runtime.callFunctionOn timed out).
         const needsRecycle =
             !this.browser ||
             !this.browser.connected ||
-            this.useCount >= this.RECYCLE_AFTER;
+            (this.useCount >= this.RECYCLE_AFTER && this.activeContexts === 0);
 
         if (needsRecycle) {
             this.isLaunching = true;
@@ -48,7 +54,6 @@ export class BrowserManager implements OnModuleDestroy {
             this.launchPromise = null;
         }
 
-        this.useCount++;
         return this.browser!;
     }
 
@@ -63,12 +68,6 @@ export class BrowserManager implements OnModuleDestroy {
             headless: true,
             executablePath: process.env.CHROMIUM_PATH || undefined,
             args: this.LAUNCH_ARGS,
-            // Si un postback de SAMAI bloquea el hilo JS de la página, el timeout
-            // interno de waitForFunction no se dispara; este protocolTimeout corta
-            // el cuelgue a nivel CDP. 90s queda por encima del goto (60s) para no
-            // matar cargas legítimas lentas, y por debajo del default (180s) para
-            // fallar rápido y dejar que el reintento por proceso recupere.
-            protocolTimeout: 90000,
         });
 
         browser.on('disconnected', () => {
@@ -82,7 +81,15 @@ export class BrowserManager implements OnModuleDestroy {
 
     async newPage(): Promise<puppeteer.Page> {
         const browser = await this.getBrowser();
-        const page = await browser.newPage();
+
+        // Cada tarea corre en su propio contexto aislado (sesión/cookies/captcha
+        // propios), de modo que varias tareas concurrentes no se pisan entre sí.
+        const context = await browser.createBrowserContext();
+        this.activeContexts++;
+        this.useCount++;
+
+        const page = await context.newPage();
+        this.contextByPage.set(page, context);
 
         await page.setRequestInterception(true);
 
@@ -113,6 +120,23 @@ export class BrowserManager implements OnModuleDestroy {
         await page.setViewport({ width: 1280, height: 800 });
 
         return page;
+    }
+
+    /**
+     * Cierra la página y su contexto aislado, liberando la memoria asociada.
+     * Debe llamarse en el finally de cada tarea en lugar de page.close().
+     */
+    async releasePage(page: puppeteer.Page): Promise<void> {
+        const context = this.contextByPage.get(page);
+        try {
+            await page.close().catch(() => { });
+        } finally {
+            if (context) {
+                await context.close().catch(() => { });
+                this.contextByPage.delete(page);
+                this.activeContexts = Math.max(0, this.activeContexts - 1);
+            }
+        }
     }
 
     async onModuleDestroy() {

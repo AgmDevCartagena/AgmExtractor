@@ -36,14 +36,14 @@ export class ExtractorSchedulerService implements OnModuleInit {
 
                     const nameJob = task.id;
 
-                    const job = new CronJob(cronExpression, async () => {
+                    const job = new CronJob(cronExpression, () => {
                         this.logger.log(`Ejecutando tarea programadas`);
-                        try {
-                            await this.scraper.extractData(task.id, task.parteProcesal, task.juzgado);
-                        } catch (error) {
+                        this.extractionQueue.enqueue(task.id, () =>
+                            this.scraper.extractData(task.id, task.parteProcesal, task.juzgado)
+                        ).catch(error => {
                             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
                             this.logger.error(`Error en tarea programada para el usuario ${task.userId}: ${errorMessage}`);
-                        }
+                        });
                     })
 
                     this.schedulerRegistry.addCronJob(nameJob, job);
@@ -69,13 +69,13 @@ export class ExtractorSchedulerService implements OnModuleInit {
                     continue;
                 }
 
-                const job = new CronJob(cronExpression, async () => {
-                    try {
-                        await this.scraper.extractDataByRadicado(task.id, task.radicado, task.juzgado, true);
-                    } catch (error) {
+                const job = new CronJob(cronExpression, () => {
+                    this.extractionQueue.enqueue(`radicado_${task.id}`, () =>
+                        this.scraper.extractDataByRadicado(task.id, task.radicado, task.juzgado, true)
+                    ).catch(error => {
                         const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
                         this.logger.error(`Error en tarea radicado [${task.id}]: ${errorMessage}`);
-                    }
+                    });
                 });
 
                 this.schedulerRegistry.addCronJob(`radicado_${task.id}`, job);
