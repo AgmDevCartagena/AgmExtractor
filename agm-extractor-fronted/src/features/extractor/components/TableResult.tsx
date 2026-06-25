@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useResultadosExtraccion, type ProcesoJudicial, useDetalleProceso, useExportarUltimaActuacion, type Actuacion } from "../hooks/useTask";
+import { useResultadosExtraccion, type ProcesoJudicial, useDetalleProceso, useExportarUltimaActuacion, useExportarProcesos, type Actuacion } from "../hooks/useTask";
 import { useResultadosRadicado } from "../hooks/useRadicado";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
@@ -364,6 +364,7 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
   );
   const [procesoSeleccionado, setProcesoSeleccionado] = useState<ProcesoJudicial | null>(null);
   const exportar = useExportarUltimaActuacion();
+  const exportarProcesos = useExportarProcesos();
 
   const isLoading = isRadicadoMode ? isRadicadoLoading : isProcesalLoading;
   const isError = isRadicadoMode ? isRadicadoError : isProcesalError;
@@ -461,6 +462,24 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
             <Button
               variant="outline"
               size="sm"
+              onClick={() => exportarProcesos.mutate(undefined, {
+                onSuccess: () => toast.success('Archivo de procesos descargado'),
+                onError: (error: Error) => toast.error(error.message || 'Error al exportar el archivo'),
+              })}
+              disabled={exportarProcesos.isPending}
+              className="h-8 gap-1.5 text-[13px] cursor-pointer"
+              title="Descargar Excel con todos tus procesos registrados"
+            >
+              {exportarProcesos.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              Exportar Procesos
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => exportar.mutate(undefined, {
                 onSuccess: () => toast.success('Archivo de última actuación descargado'),
                 onError: (error: Error) => toast.error(error.message || 'Error al exportar el archivo'),
@@ -489,6 +508,7 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
                 <TableHead className="w-50 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Radicado</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Tipo proceso</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Demandante</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Última actuación</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Descubierto</TableHead>
                 <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Acciones</TableHead>
               </TableRow>
@@ -517,6 +537,20 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
                   </TableCell>
                   <TableCell className="text-[13px] font-medium text-foreground">
                     {proceso.demandante}
+                  </TableCell>
+                  <TableCell className="max-w-50 text-[13px] text-foreground">
+                    {proceso.ultimaActuacion ? (
+                      <span className="flex flex-col gap-0.5">
+                        {proceso.ultimaActuacionFecha && (
+                          <span className="text-[11px] font-mono tabular-nums text-muted-foreground">
+                            {new Date(proceso.ultimaActuacionFecha).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                        <span className="line-clamp-2 leading-snug">{proceso.ultimaActuacion}</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
                   </TableCell>
                   <TableCell
                     className="text-muted-foreground text-xs whitespace-nowrap"

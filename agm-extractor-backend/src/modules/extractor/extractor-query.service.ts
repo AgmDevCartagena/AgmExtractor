@@ -10,6 +10,18 @@ export class ExtractorQueryService {
         private readonly prisma: PrismaService,
     ) { }
 
+    private agregarUltimaActuacion<T extends { actuaciones?: { fechaActuacion: Date | null; actuacion: string | null }[] }>(
+        proceso: T,
+    ) {
+        const { actuaciones, ...resto } = proceso;
+        const ultima = actuaciones?.[0];
+        return {
+            ...resto,
+            ultimaActuacion: ultima?.actuacion ?? null,
+            ultimaActuacionFecha: ultima?.fechaActuacion ?? null,
+        };
+    }
+
     async getDataForScheduledTask(pagination: PaginationQueryDto, userId: string) {
         const { limit, page, taskId } = pagination;
         const effectiveLimit = (limit && limit > 0) ? limit : 10;
@@ -29,7 +41,14 @@ export class ExtractorQueryService {
                     where: whereClause,
                     skip,
                     take: effectiveLimit,
-                    orderBy: { createdAt: 'desc' }
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        actuaciones: {
+                            orderBy: { fechaActuacion: 'desc' },
+                            take: 1,
+                            select: { fechaActuacion: true, actuacion: true },
+                        },
+                    },
                 }),
                 this.prisma.procesosJudiciales.count({
                     where: { tareaProgramada: { userId } }
@@ -48,7 +67,7 @@ export class ExtractorQueryService {
                 }
             }
             return {
-                data,
+                data: data.map((proceso) => this.agregarUltimaActuacion(proceso)),
                 meta: {
                     total,
                     page,
@@ -164,7 +183,14 @@ export class ExtractorQueryService {
                     where: whereClause,
                     skip,
                     take: effectiveLimit,
-                    orderBy: { createdAt: 'desc' }
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        actuaciones: {
+                            orderBy: { fechaActuacion: 'desc' },
+                            take: 1,
+                            select: { fechaActuacion: true, actuacion: true },
+                        },
+                    },
                 }),
                 this.prisma.procesosJudiciales.count({
                     where: whereClause
@@ -179,7 +205,7 @@ export class ExtractorQueryService {
             }
 
             return {
-                data,
+                data: data.map((proceso) => this.agregarUltimaActuacion(proceso)),
                 meta: {
                     total,
                     page,
@@ -222,6 +248,41 @@ export class ExtractorQueryService {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Error al obtener procesos para exportar última actuación: ${errorMessage}`);
+            throw new HttpException(`Fallo al obtener datos: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    async getProcesosParaExportar(userId: string) {
+        try {
+            const procesos = await this.prisma.procesosJudiciales.findMany({
+                where: {
+                    OR: [
+                        { tareaProgramada: { userId } },
+                        { tareaProgramadaRadicado: { userId } },
+                    ],
+                },
+                select: {
+                    radicado: true,
+                    tipoProceso: true,
+                    demandante: true,
+                    demandado: true,
+                    ponente: true,
+                    corporacion: true,
+                    clase: true,
+                    subclase: true,
+                    naturaleza: true,
+                    etapa: true,
+                    vigente: true,
+                    fechaRadicado: true,
+                    fechaPresentacion: true,
+                    fechaDescubrimiento: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            return procesos;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Error al obtener procesos para exportar: ${errorMessage}`);
             throw new HttpException(`Fallo al obtener datos: ${errorMessage}`, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

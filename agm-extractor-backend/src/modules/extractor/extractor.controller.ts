@@ -124,6 +124,20 @@ export class ExtractorController {
         return new StreamableFile(buffer);
     }
 
+    @Get('export/procesos')
+    @Throttle({ default: { limit: 10, ttl: 70000 } })
+    async exportProcesos(
+        @CurrentUser() user: { id: string },
+        @Res({ passthrough: true }) res: Response,
+    ): Promise<StreamableFile> {
+        const buffer = await this.exporter.exportProcesos(user.id);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename="procesos.xlsx"',
+        });
+        return new StreamableFile(buffer);
+    }
+
     @Get('proceso/:id')
     @Throttle({ default: { limit: 100, ttl: 70000 } })
     getProcesoDetalle(

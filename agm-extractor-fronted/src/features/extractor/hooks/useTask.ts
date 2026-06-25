@@ -18,6 +18,8 @@ export interface ProcesoJudicial {
     textoCompleto: string;
     fechaDescubrimiento: string;
     detalleExtraido: boolean;
+    ultimaActuacion?: string | null;
+    ultimaActuacionFecha?: string | null;
 }
 
 export interface Actuacion {
@@ -123,6 +125,13 @@ export const useExportarUltimaActuacion = () => {
     return useMutation({
         mutationFn: () =>
             apiDownload('/extractor/export/ultima-actuacion', 'ultima-actuacion.xlsx'),
+    });
+};
+
+export const useExportarProcesos = () => {
+    return useMutation({
+        mutationFn: () =>
+            apiDownload('/extractor/export/procesos', 'procesos.xlsx'),
     });
 };
 
