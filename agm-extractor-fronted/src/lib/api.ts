@@ -19,3 +19,22 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
 
     return response.json();
 };
+
+export const apiDownload = async (endpoint: string, filename: string) => {
+    const url = `${BASE_URL}${endpoint}`;
+
+    const response = await fetch(url, { credentials: 'include' });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al descargar el archivo');
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+};

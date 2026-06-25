@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../../../lib/api';
+import { apiFetch, apiDownload } from '../../../lib/api';
 
 export type FrecuenciaPermitida = '3min' | '15min' | '30min' | '1h' | '12h' | '1d' | '2d' | '3d';
 
@@ -118,6 +118,13 @@ export const useTareasProgramadas = (userId: string | null, page = 1, limit = 10
         refetchInterval: userId ? 15000 : false,
     })
 }
+
+export const useExportarUltimaActuacion = () => {
+    return useMutation({
+        mutationFn: () =>
+            apiDownload('/extractor/export/ultima-actuacion', 'ultima-actuacion.xlsx'),
+    });
+};
 
 export const useDetalleProceso = (procesoId: string | null) =>
     useQuery<ProcesoDetalle>({

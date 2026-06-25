@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useResultadosExtraccion, type ProcesoJudicial, useDetalleProceso, type Actuacion } from "../hooks/useTask";
+import { useResultadosExtraccion, type ProcesoJudicial, useDetalleProceso, useExportarUltimaActuacion, type Actuacion } from "../hooks/useTask";
 import { useResultadosRadicado } from "../hooks/useRadicado";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
-import { X, ExternalLink, FileText, Search, AlertCircle, Loader2, ChevronLeft, ChevronRight, Radar, Plus, Info, Clock } from "lucide-react";
+import { X, ExternalLink, FileText, Search, AlertCircle, Loader2, ChevronLeft, ChevronRight, Radar, Plus, Info, Clock, Download } from "lucide-react";
+import { toast } from "sonner";
 
 interface TablaResultadosProps {
   userId: string | undefined;
@@ -362,6 +363,7 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
     limit
   );
   const [procesoSeleccionado, setProcesoSeleccionado] = useState<ProcesoJudicial | null>(null);
+  const exportar = useExportarUltimaActuacion();
 
   const isLoading = isRadicadoMode ? isRadicadoLoading : isProcesalLoading;
   const isError = isRadicadoMode ? isRadicadoError : isProcesalError;
@@ -455,9 +457,29 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
               {hasSelection ? 'Procesos del radar seleccionado' : 'Todos los radares'}
             </p>
           </div>
-          <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 tabular-nums">
-            {procesos.length} resultados
-          </Badge>
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportar.mutate(undefined, {
+                onSuccess: () => toast.success('Archivo de última actuación descargado'),
+                onError: (error: Error) => toast.error(error.message || 'Error al exportar el archivo'),
+              })}
+              disabled={exportar.isPending}
+              className="h-8 gap-1.5 text-[13px] cursor-pointer"
+              title="Descargar Excel con la última actuación de todos tus procesos"
+            >
+              {exportar.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              Exportar Última Actuación
+            </Button>
+            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 tabular-nums">
+              {procesos.length} resultados
+            </Badge>
+          </div>
         </div>
 
         <div className="overflow-auto flex-1 custom-scrollbar">
