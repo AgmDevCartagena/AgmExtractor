@@ -186,7 +186,7 @@ export class SamaiScraperService {
 
             if (todosLosResultados.length > 0) {
                 await this.saveDataToDatabase(todosLosResultados, taskId);
-                await this.extractDetailsProcess(page, todosLosResultados, taskId, 'parteProcesal');
+                await this.extractDetailsProcess(page, todosLosResultados, taskId, 'parteProcesal', juzgado);
             }
 
             if (taskId) {
@@ -336,6 +336,116 @@ export class SamaiScraperService {
         return this.extractDataByRadicado(null, dto.radicado, dto.juzgado, false);
     }
 
+    /**
+     * Realiza una búsqueda por radicado dejando la tabla de resultados
+     * (#DT_listadoprocs) cargada con ese proceso. Devuelve true si la búsqueda
+     * se completó (tabla lista), false si el juzgado no existe o no hubo
+     * respuesta. Navega siempre con page.goto, así cada llamada arranca con un
+     * formulario limpio.
+     */
+    private async buscarPorRadicado(
+        page: puppeteer.Page,
+        radicado: string,
+        juzgado: string,
+    ): Promise<boolean> {
+        await page.goto('https://samai.consejodeestado.gov.co/Vistas/Casos/procesos.aspx', {
+            waitUntil: 'networkidle2',
+            timeout: 60000,
+        });
+
+        await page.waitForSelector('#FW_Rbtradicado');
+        await page.click('#FW_Rbtradicado');
+
+        await page.waitForSelector('::-p-text(Por corporación)');
+        await page.click('::-p-text(Por corporación)');
+
+        const selectorDropdown = '#FW_LstCorporacion';
+        await page.waitForSelector(selectorDropdown);
+
+        const valorNumerico = await page.evaluate((texto, selector) => {
+            const select = document.querySelector<HTMLSelectElement>(selector);
+            if (!select) return null;
+            const opcion = Array.from(select.options).find(opt =>
+                opt.text.toUpperCase().includes(texto.toUpperCase())
+            );
+            return opcion?.value ?? null;
+        }, juzgado, selectorDropdown);
+
+        if (!valorNumerico) {
+            this.logger.warn(`Juzgado "${juzgado}" no encontrado en el dropdown.`);
+            return false;
+        }
+
+        await page.select(selectorDropdown, valorNumerico);
+        await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => { });
+
+        const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
+        const btnBuscar = '#FW_buscarnormal';
+        await page.waitForSelector(inputBusqueda);
+
+        await page.evaluate((selector) => {
+            const input = document.querySelector<HTMLInputElement>(selector);
+            if (!input) return;
+            input.focus();
+            input.value = '';
+            ['input', 'change', 'keyup'].forEach(evt =>
+                input.dispatchEvent(new Event(evt, { bubbles: true }))
+            );
+        }, inputBusqueda);
+
+        await new Promise(r => setTimeout(r, 300));
+        await page.type(inputBusqueda, radicado, { delay: 50 });
+
+        await page.evaluate((selector) => {
+            document.querySelector<HTMLInputElement>(selector)
+                ?.dispatchEvent(new Event('blur', { bubbles: true }));
+        }, inputBusqueda);
+
+        await new Promise(r => setTimeout(r, 200));
+
+        await page.evaluate(() => {
+            document.querySelector('#DT_listadoprocs tbody')
+                ?.setAttribute('data-loading', 'true');
+        });
+
+        await page.click(btnBuscar);
+
+        const waitForTable = async (timeoutMs: number) => {
+            await page.waitForFunction(() => {
+                const tbody = document.querySelector('#DT_listadoprocs tbody');
+                if (!tbody) return false;
+                if (tbody.getAttribute('data-loading') !== 'true') return true;
+
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                if (rows.length === 0) return false;
+
+                const text = rows.map(r => r.textContent || '').join(' ');
+                const isDone = !text.includes('Cargando') && !text.includes('Procesando');
+
+                if (isDone) tbody.removeAttribute('data-loading');
+                return isDone;
+            }, { timeout: timeoutMs, polling: 300 });
+        };
+
+        try {
+            await waitForTable(30000);
+            await new Promise(r => setTimeout(r, 500));
+        } catch {
+            this.logger.warn(`Timeout para radicado "${radicado}". Reintentando con Enter...`);
+            try {
+                await page.focus(inputBusqueda);
+                await page.keyboard.press('Enter');
+                await waitForTable(30000);
+                await new Promise(r => setTimeout(r, 500));
+            } catch {
+                this.logger.warn(`Sin resultados para radicado "${radicado}" tras retry.`);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     async extractDataByRadicado(
         taskId: string | null,
         radicado: string,
@@ -352,99 +462,9 @@ export class SamaiScraperService {
         const page = await this.browserManager.newPage();
 
         try {
-            await page.goto('https://samai.consejodeestado.gov.co/Vistas/Casos/procesos.aspx', {
-                waitUntil: 'networkidle2',
-                timeout: 60000,
-            });
-
-            await page.waitForSelector('#FW_Rbtradicado');
-            await page.click('#FW_Rbtradicado');
-
-            await page.waitForSelector('::-p-text(Por corporación)');
-            await page.click('::-p-text(Por corporación)');
-
-            const selectorDropdown = '#FW_LstCorporacion';
-            await page.waitForSelector(selectorDropdown);
-
-            const valorNumerico = await page.evaluate((texto, selector) => {
-                const select = document.querySelector<HTMLSelectElement>(selector);
-                if (!select) return null;
-                const opcion = Array.from(select.options).find(opt =>
-                    opt.text.toUpperCase().includes(texto.toUpperCase())
-                );
-                return opcion?.value ?? null;
-            }, juzgado, selectorDropdown);
-
-            if (!valorNumerico) {
-                this.logger.warn(`Juzgado "${juzgado}" no encontrado en el dropdown.`);
+            const busquedaOk = await this.buscarPorRadicado(page, radicado, juzgado);
+            if (!busquedaOk) {
                 return [];
-            }
-
-            await page.select(selectorDropdown, valorNumerico);
-            await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => { });
-
-            const inputBusqueda = 'input[placeholder="Ingrese el dato a buscar"]';
-            const btnBuscar = '#FW_buscarnormal';
-            await page.waitForSelector(inputBusqueda);
-
-            await page.evaluate((selector) => {
-                const input = document.querySelector<HTMLInputElement>(selector);
-                if (!input) return;
-                input.focus();
-                input.value = '';
-                ['input', 'change', 'keyup'].forEach(evt =>
-                    input.dispatchEvent(new Event(evt, { bubbles: true }))
-                );
-            }, inputBusqueda);
-
-            await new Promise(r => setTimeout(r, 300));
-            await page.type(inputBusqueda, radicado, { delay: 50 });
-
-            await page.evaluate((selector) => {
-                document.querySelector<HTMLInputElement>(selector)
-                    ?.dispatchEvent(new Event('blur', { bubbles: true }));
-            }, inputBusqueda);
-
-            await new Promise(r => setTimeout(r, 200));
-
-            await page.evaluate(() => {
-                document.querySelector('#DT_listadoprocs tbody')
-                    ?.setAttribute('data-loading', 'true');
-            });
-
-            await page.click(btnBuscar);
-
-            const waitForTable = async (timeoutMs: number) => {
-                await page.waitForFunction(() => {
-                    const tbody = document.querySelector('#DT_listadoprocs tbody');
-                    if (!tbody) return false;
-                    if (tbody.getAttribute('data-loading') !== 'true') return true;
-
-                    const rows = Array.from(tbody.querySelectorAll('tr'));
-                    if (rows.length === 0) return false;
-
-                    const text = rows.map(r => r.textContent || '').join(' ');
-                    const isDone = !text.includes('Cargando') && !text.includes('Procesando');
-
-                    if (isDone) tbody.removeAttribute('data-loading');
-                    return isDone;
-                }, { timeout: timeoutMs, polling: 300 });
-            };
-
-            try {
-                await waitForTable(30000);
-                await new Promise(r => setTimeout(r, 500));
-            } catch {
-                this.logger.warn(`Timeout para radicado "${radicado}". Reintentando con Enter...`);
-                try {
-                    await page.focus(inputBusqueda);
-                    await page.keyboard.press('Enter');
-                    await waitForTable(30000);
-                    await new Promise(r => setTimeout(r, 500));
-                } catch {
-                    this.logger.warn(`Sin resultados para radicado "${radicado}" tras retry.`);
-                    return [];
-                }
             }
 
             const resultados = await page.evaluate(() => {
@@ -492,7 +512,7 @@ export class SamaiScraperService {
 
             if (persist && taskId && resultados.length > 0) {
                 await this.saveRadicadoDataToDatabase(resultados, taskId);
-                await this.extractDetailsProcess(page, resultados, taskId, 'radicado');
+                await this.extractDetailsProcess(page, resultados, taskId, 'radicado', juzgado);
             }
 
             if (persist && taskId) {
@@ -590,9 +610,8 @@ export class SamaiScraperService {
 
     /**
      * Resuelve el acceso al detalle de un proceso: espera lo que aparezca
-     * primero (captcha o detalle directo), resuelve el captcha si aparece,
-     * y devuelve el número de navegaciones producidas para que el caller
-     * sepa cuántos goBack() debe ejecutar al volver.
+     * primero (captcha o detalle directo) y resuelve el captcha si aparece.
+     * Al terminar, la página queda en la vista de detalle del proceso.
      */
     private async resolverAccesoDetalle(page: puppeteer.Page): Promise<number> {
         // Espera captcha O detalle directo (SAMAI solo pide captcha una vez por sesión)
@@ -710,74 +729,94 @@ export class SamaiScraperService {
         page: puppeteer.Page,
         results: any[],
         taskId: string,
-        taskType: 'parteProcesal' | 'radicado'
+        taskType: 'parteProcesal' | 'radicado',
+        juzgado: string,
     ) {
+        const MAX_INTENTOS = 2;
+
         for (let i = 0; i < results.length; i++) {
             const radicado = results[i].radicado;
             this.logger.log(`[${taskId}] Extrayendo detalle ${i + 1}/${results.length} — radicado: ${radicado}`);
 
-            try {
-                // 1. Preparar espera de navegación ANTES del click
-                const navPromise = page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
-
-                const btnFound = await page.evaluate((rad) => {
-                    const buttons = Array.from(document.querySelectorAll('button.btn-success'));
-                    const btn = buttons.find(b => {
-                        const onclick = b.getAttribute('onclick') || '';
-                        return onclick.includes(rad);
-                    });
-                    if (btn) {
-                        (btn as HTMLElement).click();
-                        return true;
-                    }
-                    return false;
-                }, radicado);
-
-                if (!btnFound) {
-                    this.logger.warn(`[${taskId}] No se encontró botón Ver para ${radicado}`);
-                    continue;
-                }
-
-                await navPromise;
-
-                // 2. Resolver acceso (captcha si aplica, o detalle directo)
-                const navegaciones = await this.resolverAccesoDetalle(page);
-
-                // 3. Scrape detalle + actuaciones
-                const { detalle, actuaciones } = await this.scrapeDetalle(page);
-
-                // 4. Guardar en BD
-                await this.saveDetalle(radicado, detalle, actuaciones, taskId, taskType);
-
-                // 5. Volver a la tabla de resultados (tantos goBack como navegaciones realizadas)
-                for (let n = 0; n < navegaciones; n++) {
-                    await page.goBack({ waitUntil: 'networkidle2' });
-                }
-
-                // Verificar que volvimos a la tabla; si no, un goBack extra
-                const enTabla = await page.$('#DT_listadoprocs').catch(() => null);
-                if (!enTabla) {
-                    await page.goBack({ waitUntil: 'networkidle2' }).catch(() => null);
-                }
-
-                await new Promise(r => setTimeout(r, 1000));
-            } catch (error) {
-                const msg = error instanceof Error ? error.message : 'Error desconocido';
-                const url = page.url();
-                const title = await page.title().catch(() => '?');
-                this.logger.error(`[${taskId}] Error extrayendo detalle de radicado "${radicado}": ${msg} | URL: ${url} | Título: ${title}`);
-
+            // Un cuelgue de SAMAI (postback lento que bloquea la página y dispara
+            // el protocolTimeout) es transitorio: se reintenta una vez con una
+            // navegación limpia antes de darse por vencido con este proceso.
+            for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
                 try {
-                    await page.goto(
-                        'https://samai.consejodeestado.gov.co/Vistas/Casos/procesos.aspx',
-                        { waitUntil: 'networkidle2', timeout: 30000 }
-                    );
-                } catch {
-                    this.logger.error(`[${taskId}] No se pudo recuperar navegación, abortando detalles.`);
+                    await this.extraerDetalleProceso(page, radicado, taskId, taskType, juzgado);
                     break;
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : 'Error desconocido';
+                    const url = page.url();
+                    const title = await page.title().catch(() => '?');
+                    this.logger.error(`[${taskId}] Error extrayendo detalle de "${radicado}" (intento ${intento}/${MAX_INTENTOS}): ${msg} | URL: ${url} | Título: ${title}`);
+
+                    if (intento < MAX_INTENTOS) {
+                        this.logger.warn(`[${taskId}] Reintentando detalle de ${radicado}...`);
+                        await new Promise(r => setTimeout(r, 1500));
+                    }
+                    // Si era el último intento, se abandona este proceso; la
+                    // siguiente iteración re-navega y no queda contaminada.
                 }
             }
+
+            // Pausa entre procesos para no saturar a SAMAI.
+            await new Promise(r => setTimeout(r, 1000));
         }
+    }
+
+    /**
+     * Extrae el detalle de un único proceso: busca por radicado, abre el
+     * detalle (resolviendo captcha si aplica), lo scrapea y lo guarda.
+     * Lanza si ocurre un error recuperable (timeout/cuelgue) para que el
+     * caller pueda reintentar.
+     */
+    private async extraerDetalleProceso(
+        page: puppeteer.Page,
+        radicado: string,
+        taskId: string,
+        taskType: 'parteProcesal' | 'radicado',
+        juzgado: string,
+    ): Promise<void> {
+        // 1. Búsqueda dedicada por radicado: garantiza que la fila y el botón
+        //    "Ver" de ESTE proceso estén en el DOM, con navegación limpia.
+        const busquedaOk = await this.buscarPorRadicado(page, radicado, juzgado);
+        if (!busquedaOk) {
+            this.logger.warn(`[${taskId}] El radicado ${radicado} no aparece en SAMAI al buscarlo; se omite el detalle.`);
+            return;
+        }
+
+        // 2. Preparar espera de navegación ANTES del click y hacer click en "Ver"
+        const navPromise = page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
+
+        const btnFound = await page.evaluate((rad) => {
+            const buttons = Array.from(document.querySelectorAll('button.btn-success'));
+            const btn = buttons.find(b => {
+                const onclick = b.getAttribute('onclick') || '';
+                return onclick.includes(rad);
+            });
+            if (btn) {
+                (btn as HTMLElement).click();
+                return true;
+            }
+            return false;
+        }, radicado);
+
+        if (!btnFound) {
+            this.logger.warn(`[${taskId}] No se encontró botón Ver para ${radicado}`);
+            return;
+        }
+
+        await navPromise;
+
+        // 3. Resolver acceso (captcha si aplica, o detalle directo)
+        await this.resolverAccesoDetalle(page);
+
+        // 4. Scrape detalle + actuaciones
+        const { detalle, actuaciones } = await this.scrapeDetalle(page);
+
+        // 5. Guardar en BD
+        await this.saveDetalle(radicado, detalle, actuaciones, taskId, taskType);
     }
 
     private async saveDetalle(

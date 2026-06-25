@@ -63,6 +63,12 @@ export class BrowserManager implements OnModuleDestroy {
             headless: true,
             executablePath: process.env.CHROMIUM_PATH || undefined,
             args: this.LAUNCH_ARGS,
+            // Si un postback de SAMAI bloquea el hilo JS de la página, el timeout
+            // interno de waitForFunction no se dispara; este protocolTimeout corta
+            // el cuelgue a nivel CDP. 90s queda por encima del goto (60s) para no
+            // matar cargas legítimas lentas, y por debajo del default (180s) para
+            // fallar rápido y dejar que el reintento por proceso recupere.
+            protocolTimeout: 90000,
         });
 
         browser.on('disconnected', () => {
