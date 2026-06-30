@@ -39,7 +39,7 @@ function Kpi({
                     <Icon size={17} />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                    <p className="text-[11px] tracking-wide text-muted-foreground font-medium">
                         {label}
                     </p>
                     <p className="text-xl font-semibold text-foreground leading-tight">{value}</p>
@@ -83,10 +83,10 @@ export default function AdminOverview() {
 
     const perfBars = perf
         ? [
-              { name: 'Éxito', value: perf.exito, color: 'var(--color-primary)' },
-              { name: 'Fallo', value: perf.fallo, color: 'var(--color-destructive)' },
-              { name: 'Corriendo', value: perf.corriendo, color: 'var(--color-muted-foreground)' },
-          ]
+            { name: 'Éxito', value: perf.exito, color: 'var(--color-primary)' },
+            { name: 'Fallo', value: perf.fallo, color: 'var(--color-destructive)' },
+            { name: 'Corriendo', value: perf.corriendo, color: 'var(--color-muted-foreground)' },
+        ]
         : [];
 
     return (
@@ -130,11 +130,10 @@ export default function AdminOverview() {
                     <button
                         key={r}
                         onClick={() => setRange(r)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${
-                            range === r
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${range === r
                                 ? 'bg-primary text-primary-foreground'
                                 : 'bg-muted text-muted-foreground hover:bg-muted/70'
-                        }`}
+                            }`}
                     >
                         {r}
                     </button>

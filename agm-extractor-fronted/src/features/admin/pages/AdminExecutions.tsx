@@ -22,9 +22,16 @@ const fmtMs = (ms: number | null) => {
     return `${(s / 60).toFixed(1)} min`;
 };
 
+const ESTADOS: Record<string, string> = {
+    RUNNING: 'Corriendo',
+    SUCCESS: 'Completado',
+    FAILED: 'Fallido',
+};
+
 const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    if (s === 'SUCCESS') return 'secondary';
-    if (s === 'FAILED') return 'destructive';
+    const v = s.toLowerCase();
+    if (v === 'success') return 'secondary';
+    if (v === 'failed') return 'destructive';
     return 'outline';
 };
 
@@ -65,9 +72,9 @@ export default function AdminExecutions() {
                     className="h-9 rounded-md border bg-card px-3 text-[13px] text-foreground cursor-pointer"
                 >
                     <option value="">Todos los estados</option>
-                    <option value="RUNNING">RUNNING</option>
-                    <option value="SUCCESS">SUCCESS</option>
-                    <option value="FAILED">FAILED</option>
+                    {Object.entries(ESTADOS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                    ))}
                 </select>
             </div>
 
@@ -104,7 +111,7 @@ export default function AdminExecutions() {
                                         <Badge variant="outline">{it.tipo}</Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={statusVariant(it.status)}>{it.status}</Badge>
+                                        <Badge variant={statusVariant(it.status)}>{ESTADOS[it.status] ?? it.status}</Badge>
                                     </TableCell>
                                     <TableCell className="text-[12px]">{fmtMs(it.durationMs)}</TableCell>
                                     <TableCell className="text-[12px]">{it.procesosEncontrados}</TableCell>

@@ -25,9 +25,10 @@ const ACCIONES = [
 ];
 
 const accionVariant = (accion: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    if (['USER_BANNED', 'USER_DELETED'].includes(accion)) return 'destructive';
-    if (['LOGIN', 'LOGOUT'].includes(accion)) return 'secondary';
-    if (['ROLE_CHANGED', 'USER_ESTADO', 'PASSWORD_RESET'].includes(accion)) return 'default';
+    const a = accion.toLowerCase();
+    if (['user_banned', 'user_deleted'].includes(a)) return 'destructive';
+    if (['login', 'logout'].includes(a)) return 'secondary';
+    if (['role_changed', 'user_estado', 'password_reset'].includes(a)) return 'default';
     return 'outline';
 };
 
@@ -56,7 +57,7 @@ export default function AdminAudit() {
                 >
                     <option value="">Todas las acciones</option>
                     {ACCIONES.map((a) => (
-                        <option key={a} value={a}>
+                        <option key={a} value={a} className='lowercase'>
                             {a}
                         </option>
                     ))}
@@ -92,7 +93,7 @@ export default function AdminAudit() {
                                         {new Date(it.createdAt).toLocaleString()}
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={accionVariant(it.accion)}>{it.accion}</Badge>
+                                        <Badge variant={accionVariant(it.accion)} className="lowercase">{it.accion}</Badge>
                                     </TableCell>
                                     <TableCell className="text-[12px]">
                                         {it.usuario ? (
