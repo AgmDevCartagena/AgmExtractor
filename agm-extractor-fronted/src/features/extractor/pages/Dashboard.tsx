@@ -3,6 +3,7 @@ import FormularioExtraccion from '../components/FormExtract';
 import TablaResultados from '../components/TableResult';
 import ListaTareas from '../components/ListTask';
 import ListaTareasRadicado from '../components/ListaTareasRadicado';
+import type { ScheduledTask } from '../hooks/useTask';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [selectedTaskHasRun, setSelectedTaskHasRun] = useState(false);
   const [activeMode, setActiveMode] = useState<ActiveMode>('task');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -32,6 +34,15 @@ export default function Dashboard() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isModalOpen]);
+
+  useEffect(() => {
+    if (!editingTask) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setEditingTask(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingTask]);
 
   const handleSelectTask = (id: string | null, hasRun?: boolean) => {
     setSelectedTaskId(id);
@@ -155,6 +166,7 @@ export default function Dashboard() {
                 tareaSeleccionada={activeMode === 'task' ? selectedTaskId : null}
                 onSelectTarea={handleSelectTask}
                 onNuevoRadar={abrirModal}
+                onEditTarea={setEditingTask}
               />
 
               <ListaTareasRadicado
@@ -216,6 +228,37 @@ export default function Dashboard() {
               if (id) setCurrentJobId(id);
               setIsModalOpen(false);
             }} />
+          </div>
+        </div>
+      )}
+
+      {editingTask && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+          onClick={() => setEditingTask(null)}
+        >
+          <div
+            className="relative w-full max-w-lg bg-card rounded-xl shadow-2xl overflow-hidden animate-modal-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground tracking-tight">Editar Radar</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Modifica los parametros de la busqueda automatica.</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingTask(null)}
+                className="rounded-full h-8 w-8 shrink-0 cursor-pointer"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+            <FormularioExtraccion
+              initialTask={editingTask}
+              onJobUpdated={() => setEditingTask(null)}
+            />
           </div>
         </div>
       )}

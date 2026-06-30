@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { useResultadosExtraccion, type ProcesoJudicial, useDetalleProceso, useExportarUltimaActuacion, useExportarProcesos, type Actuacion } from "../hooks/useTask";
+import { useResultadosExtraccion, type ProcesoJudicial, useDetalleProceso, useExportarUltimaActuacion, useExportarProcesos, useLimpiarProcesos, type Actuacion } from "../hooks/useTask";
 import { useResultadosRadicado } from "../hooks/useRadicado";
+import { useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
-import { X, ExternalLink, FileText, Search, AlertCircle, Loader2, ChevronLeft, ChevronRight, Radar, Plus, Info, Clock, Download } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { X, ExternalLink, FileText, Search, AlertCircle, Loader2, ChevronLeft, ChevronRight, Radar, Plus, Info, Clock, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface TablaResultadosProps {
@@ -363,8 +365,32 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
     limit
   );
   const [procesoSeleccionado, setProcesoSeleccionado] = useState<ProcesoJudicial | null>(null);
+  const [confirmLimpiar, setConfirmLimpiar] = useState(false);
   const exportar = useExportarUltimaActuacion();
   const exportarProcesos = useExportarProcesos();
+  const limpiarProcesos = useLimpiarProcesos();
+  const queryClient = useQueryClient();
+
+  const handleLimpiarTabla = () => {
+    const id = isRadicadoMode ? radicadoTaskId : taskId;
+    if (!id) return;
+    setConfirmLimpiar(false);
+    const loadingToast = toast.loading('Limpiando tabla...');
+    limpiarProcesos.mutate(
+      { id, modo: isRadicadoMode ? 'radicado' : 'task' },
+      {
+        onSuccess: (data: { deleted?: number }) => {
+          queryClient.invalidateQueries({ queryKey: ['resultados'] });
+          queryClient.invalidateQueries({ queryKey: ['resultadosRadicado'] });
+          setPage(1);
+          toast.success(`${data?.deleted ?? 0} procesos eliminados`, { id: loadingToast });
+        },
+        onError: (error: Error) => {
+          toast.error(error.message || 'Error al limpiar la tabla', { id: loadingToast });
+        },
+      }
+    );
+  };
 
   const isLoading = isRadicadoMode ? isRadicadoLoading : isProcesalLoading;
   const isError = isRadicadoMode ? isRadicadoError : isProcesalError;
@@ -495,6 +521,23 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
               )}
               Exportar Última Actuación
             </Button>
+            {hasSelection && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmLimpiar(true)}
+                disabled={limpiarProcesos.isPending}
+                className="h-8 gap-1.5 text-[13px] text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                title="Eliminar todos los procesos de este radar"
+              >
+                {limpiarProcesos.isPending ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+                Limpiar tabla
+              </Button>
+            )}
             <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 tabular-nums">
               {procesos.length} resultados
             </Badge>
@@ -607,6 +650,16 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
           onClose={() => setProcesoSeleccionado(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmLimpiar}
+        destructive
+        title="Limpiar tabla"
+        description="Se eliminaran de forma permanente todos los procesos y actuaciones de este radar. El radar seguira activo y volvera a poblar la tabla en su proxima ejecucion."
+        confirmText="Limpiar"
+        onConfirm={handleLimpiarTabla}
+        onCancel={() => setConfirmLimpiar(false)}
+      />
     </>
   );
 }

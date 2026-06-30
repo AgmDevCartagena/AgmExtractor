@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useProgramarTarea, type FrecuenciaPermitida } from '../hooks/useTask';
+import { useProgramarTarea, useEditarTarea, type FrecuenciaPermitida, type ScheduledTask } from '../hooks/useTask';
 import { useProgramarRadicado } from '../hooks/useRadicado';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,9 @@ import { useQueryClient } from '@tanstack/react-query';
 type ModoBusqueda = 'procesal' | 'radicado';
 
 interface FormularioProps {
-  onJobCreated: (jobId: string) => void;
+  onJobCreated?: (jobId: string) => void;
+  initialTask?: ScheduledTask;
+  onJobUpdated?: () => void;
 }
 
 export const CORPORACIONES = [
@@ -93,19 +95,27 @@ export const CORPORACIONES = [
   { value: "7600123", label: "Tribunal Administrativo del Valle del Cauca" },
 ];
 
-export default function FormularioExtraccion({ onJobCreated }: FormularioProps) {
+export default function FormularioExtraccion({ onJobCreated, initialTask, onJobUpdated }: FormularioProps) {
+  const isEdit = !!initialTask;
   const [modo, setModo] = useState<ModoBusqueda>('procesal');
   const [parteProcesalInput, setParteProcesalInput] = useState('');
-  const [partesProcesales, setPartesProcesales] = useState<string[]>([]);
+  const [partesProcesales, setPartesProcesales] = useState<string[]>(
+    initialTask ? (Array.isArray(initialTask.parteProcesal) ? initialTask.parteProcesal : [initialTask.parteProcesal]) : []
+  );
   const [radicado, setRadicado] = useState('');
-  const [juzgado, setJuzgado] = useState('');
-  const [frecuencia, setFrecuencia] = useState<FrecuenciaPermitida>('1d');
+  const [juzgado, setJuzgado] = useState(
+    initialTask ? (CORPORACIONES.find(c => c.label === initialTask.juzgado)?.value ?? '') : ''
+  );
+  const [frecuencia, setFrecuencia] = useState<FrecuenciaPermitida>(initialTask?.frecuencia ?? '1d');
 
   const programarMutation = useProgramarTarea();
+  const editarMutation = useEditarTarea();
   const programarRadicadoMutation = useProgramarRadicado();
   const queryClient = useQueryClient();
 
-  const isPending = modo === 'procesal' ? programarMutation.isPending : programarRadicadoMutation.isPending;
+  const isPending = isEdit
+    ? editarMutation.isPending
+    : modo === 'procesal' ? programarMutation.isPending : programarRadicadoMutation.isPending;
 
   const cambiarModo = (nuevoModo: ModoBusqueda) => {
     setModo(nuevoModo);
@@ -139,6 +149,37 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
     const corporacionSeleccionada = CORPORACIONES.find(c => c.value === juzgado);
     const juzgadoNombre = corporacionSeleccionada ? corporacionSeleccionada.label : juzgado;
 
+    if (isEdit && initialTask) {
+      const partesEdit = [...partesProcesales];
+      if (parteProcesalInput.trim() && !partesEdit.includes(parteProcesalInput.trim())) {
+        partesEdit.push(parteProcesalInput.trim());
+      }
+      if (partesEdit.length === 0) {
+        toast.error('Ingresa al menos una parte procesal.');
+        return;
+      }
+      if (!juzgado) {
+        toast.error('Selecciona una corporacion / juzgado.');
+        return;
+      }
+
+      editarMutation.mutate(
+        { id: initialTask.id, parteProcesal: partesEdit, juzgado: juzgadoNombre, frecuencia },
+        {
+          onSuccess: () => {
+            toast.success('Radar actualizado exitosamente');
+            queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
+            queryClient.invalidateQueries({ queryKey: ['resultados'] });
+            onJobUpdated?.();
+          },
+          onError: (error) => {
+            toast.error(error.message || 'Error al actualizar el radar');
+          },
+        }
+      );
+      return;
+    }
+
     if (modo === 'radicado') {
       const radicadoLimpio = radicado.trim();
       if (!radicadoLimpio) {
@@ -155,7 +196,7 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
         {
           onSuccess: (data: any) => {
             toast.success('Radar de radicado programado exitosamente');
-            onJobCreated(data?.id || '');
+            onJobCreated?.(data?.id || '');
             resetForm();
           },
           onError: (error) => {
@@ -184,7 +225,7 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
         onSuccess: (data) => {
           toast.success('Radar programado exitosamente');
           queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
-          onJobCreated(data?.id || '');
+          onJobCreated?.(data?.id || '');
           resetForm();
         },
         onError: (error) => {
@@ -197,6 +238,7 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
   return (
     <div className="p-5">
         <form onSubmit={handleSubmit} className="space-y-5">
+          {!isEdit && (
           <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-lg">
             <button
               type="button"
@@ -223,6 +265,7 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
               Radicado
             </button>
           </div>
+          )}
 
           <div className="space-y-4">
             {modo === 'procesal' ? (
@@ -336,10 +379,10 @@ export default function FormularioExtraccion({ onJobCreated }: FormularioProps) 
             {isPending ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                Programando...
+                {isEdit ? 'Guardando...' : 'Programando...'}
               </span>
             ) : (
-              'Programar Busqueda'
+              isEdit ? 'Guardar cambios' : 'Programar Busqueda'
             )}
           </Button>
         </form>

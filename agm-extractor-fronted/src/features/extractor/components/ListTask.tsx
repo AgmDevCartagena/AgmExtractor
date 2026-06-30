@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTareasProgramadas, useCancelarTarea } from '../hooks/useTask';
-import { Radar, ChevronLeft, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
+import { Radar, ChevronLeft, ChevronRight, AlertCircle, Trash2, Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -11,6 +11,7 @@ interface ListaTareasProps {
   tareaSeleccionada: string | null;
   onSelectTarea: (id: string | null, hasRun?: boolean) => void;
   onNuevoRadar?: () => void;
+  onEditTarea?: (tarea: ScheduledTask) => void;
 }
 
 function TareaSkeleton() {
@@ -27,11 +28,13 @@ function TareaRow({
   isSelected,
   onSelect,
   onDelete,
+  onEdit,
 }: {
   tarea: ScheduledTask;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: (e: React.MouseEvent) => void;
+  onEdit: (e: React.MouseEvent) => void;
 }) {
   const partes = Array.isArray(tarea.parteProcesal)
     ? tarea.parteProcesal.join(', ')
@@ -69,18 +72,27 @@ function TareaRow({
       <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide bg-muted px-1.5 py-0.5 rounded shrink-0 group-hover:hidden">
         {tarea.frecuencia}
       </span>
-      <button
-        onClick={onDelete}
-        className="p-1.5 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors hidden group-hover:block shrink-0"
-        title="Eliminar radar"
-      >
-        <Trash2 size={13} />
-      </button>
+      <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+        <button
+          onClick={onEdit}
+          className="p-1.5 text-muted-foreground/50 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+          title="Editar radar"
+        >
+          <Pencil size={13} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+          title="Eliminar radar"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
     </div>
   );
 }
 
-export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, onNuevoRadar }: ListaTareasProps) {
+export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, onNuevoRadar, onEditTarea }: ListaTareasProps) {
   const [page, setPage] = useState(1);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const limit = 8;
@@ -202,6 +214,7 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
             isSelected={tareaSeleccionada === tarea.id}
             onSelect={() => onSelectTarea(tarea.id, tarea.ultimaEjecucion != null)}
             onDelete={(e) => handleEliminarTarea(e, tarea.id)}
+            onEdit={(e) => { e.stopPropagation(); onEditTarea?.(tarea); }}
           />
         ))}
       </div>

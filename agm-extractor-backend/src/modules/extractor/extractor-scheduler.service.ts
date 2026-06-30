@@ -143,6 +143,60 @@ export class ExtractorSchedulerService implements OnModuleInit {
         };
     }
 
+    async updateScheduledExtraction(jobId: string, params: ScheduleParamsDto, userId: string) {
+        const { frecuencia, parteProcesal: partesProcesales, juzgado } = params;
+
+        const cronExpression = this.translateFrecuency(frecuencia);
+        if (!cronExpression) {
+            throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
+        }
+
+        const userTask = await this.prisma.tareaProgramada.findFirst({
+            where: { id: jobId, userId },
+        });
+        if (!userTask) {
+            throw new HttpException('Radar no encontrado para este usuario', HttpStatus.NOT_FOUND);
+        }
+
+        await this.prisma.tareaProgramada.update({
+            where: { id: jobId },
+            data: { frecuencia, parteProcesal: partesProcesales, juzgado, activa: true, deletedAt: null },
+        });
+
+        // Recrear el cron job con los nuevos parámetros
+        try {
+            const existingJob = this.schedulerRegistry.getCronJob(jobId);
+            existingJob.stop();
+            this.schedulerRegistry.deleteCronJob(jobId);
+        } catch {
+            this.logger.warn(`No había cron job activo para [${jobId}], se creará uno nuevo.`);
+        }
+
+        const job = new CronJob(cronExpression, () => {
+            this.extractionQueue.enqueue(jobId, () =>
+                this.scraper.extractData(jobId, partesProcesales, juzgado)
+            ).catch(err =>
+                this.logger.error(`Error en tarea [${jobId}]: ${err?.message}`)
+            );
+        });
+
+        this.schedulerRegistry.addCronJob(jobId, job);
+        job.start();
+
+        // Primera corrida inmediata en background con los nuevos parámetros
+        this.extractionQueue.enqueue(jobId, () =>
+            this.scraper.extractData(jobId, partesProcesales, juzgado)
+        ).catch(err => this.logger.error(`Error en corrida inmediata tras edición [${jobId}]: ${err?.message}`));
+
+        this.logger.log(`Tarea [${jobId}] actualizada para usuario ${userId} con frecuencia ${frecuencia}`);
+
+        return {
+            message: 'Radar actualizado con éxito',
+            jobName: jobId,
+            frecuencia,
+        };
+    }
+
     async stopScheduledExtraction(jobId: string, userId: string) {
         try {
             const userTask = await this.prisma.tareaProgramada.findFirst({

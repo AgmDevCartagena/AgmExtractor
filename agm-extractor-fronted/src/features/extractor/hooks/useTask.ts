@@ -92,6 +92,35 @@ export const useCancelarTarea = () => {
     });
 };
 
+export interface EditarTareaParams {
+    id: string;
+    parteProcesal: string[];
+    juzgado: string;
+    frecuencia: FrecuenciaPermitida;
+}
+
+export const useEditarTarea = () => {
+    return useMutation({
+        mutationFn: ({ id, ...body }: EditarTareaParams) =>
+            apiFetch(`/extractor/schedule/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify(body),
+            }),
+    });
+};
+
+export const useLimpiarProcesos = () => {
+    return useMutation({
+        mutationFn: ({ id, modo }: { id: string; modo: 'task' | 'radicado' }) =>
+            apiFetch(
+                modo === 'radicado'
+                    ? `/extractor/radicado/schedule/${id}/procesos`
+                    : `/extractor/schedule/${id}/procesos`,
+                { method: 'DELETE' },
+            ),
+    });
+};
+
 export const useResultadosExtraccion = (
     userId: string | null | undefined,
     taskId: string | null,

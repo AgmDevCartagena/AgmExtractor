@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
 import { ScheduleParamsDto } from './dto/schedule-params.dto';
 import { ScheduleRadicadoDto } from './dto/schedule-radicado.dto';
@@ -37,6 +37,25 @@ export class ExtractorController {
         @CurrentUser() user: { id: string }
     ) {
         return this.scheduler.stopScheduledExtraction(jobId, user.id);
+    }
+
+    @Patch('schedule/:jobId')
+    @Throttle({ default: { limit: 10, ttl: 70000 } })
+    updateScheduledExtraction(
+        @Param('jobId') jobId: string,
+        @Body() body: ScheduleParamsDto,
+        @CurrentUser() user: { id: string }
+    ) {
+        return this.scheduler.updateScheduledExtraction(jobId, body, user.id);
+    }
+
+    @Delete('schedule/:jobId/procesos')
+    @Throttle({ default: { limit: 20, ttl: 70000 } })
+    deleteProcesosScheduledTask(
+        @Param('jobId') jobId: string,
+        @CurrentUser() user: { id: string }
+    ) {
+        return this.query.deleteProcesosByTask(jobId, user.id, 'task');
     }
 
     @Get('schedule')
@@ -108,6 +127,15 @@ export class ExtractorController {
         @CurrentUser() user: { id: string }
     ) {
         return this.scheduler.stopRadicadoExtraction(jobId, user.id);
+    }
+
+    @Delete('radicado/schedule/:jobId/procesos')
+    @Throttle({ default: { limit: 20, ttl: 70000 } })
+    deleteProcesosRadicadoTask(
+        @Param('jobId') jobId: string,
+        @CurrentUser() user: { id: string }
+    ) {
+        return this.query.deleteProcesosByTask(jobId, user.id, 'radicado');
     }
 
     @Get('export/ultima-actuacion')

@@ -252,6 +252,39 @@ export class ExtractorQueryService {
         }
     }
 
+    async deleteProcesosByTask(taskId: string, userId: string, modo: 'task' | 'radicado') {
+        try {
+            if (modo === 'radicado') {
+                const tarea = await this.prisma.tareaProgramadaRadicado.findFirst({
+                    where: { id: taskId, userId },
+                });
+                if (!tarea) throw new HttpException('Radar no encontrado para este usuario', HttpStatus.NOT_FOUND);
+
+                const { count } = await this.prisma.procesosJudiciales.deleteMany({
+                    where: { tareaProgramadaRadicadoId: taskId },
+                });
+                this.logger.log(`Procesos eliminados para radar radicado [${taskId}]: ${count}`);
+                return { deleted: count };
+            }
+
+            const tarea = await this.prisma.tareaProgramada.findFirst({
+                where: { id: taskId, userId },
+            });
+            if (!tarea) throw new HttpException('Radar no encontrado para este usuario', HttpStatus.NOT_FOUND);
+
+            const { count } = await this.prisma.procesosJudiciales.deleteMany({
+                where: { tareaProgramadaId: taskId },
+            });
+            this.logger.log(`Procesos eliminados para radar [${taskId}]: ${count}`);
+            return { deleted: count };
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+            const msg = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`Error al eliminar procesos del radar [${taskId}]: ${msg}`);
+            throw new HttpException(`Fallo al eliminar procesos: ${msg}`, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     async getProcesosParaExportar(userId: string) {
         try {
             const procesos = await this.prisma.procesosJudiciales.findMany({
