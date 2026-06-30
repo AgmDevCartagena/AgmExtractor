@@ -120,7 +120,7 @@ export default function ListaTareasRadicado({ userId, tareaSeleccionada, onSelec
 
   const sectionHeader = (
     <div className="px-4 pt-3 pb-1.5 border-t">
-      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+      <p className="text-[11px] font-semibold text-muted-foreground tracking-wider">
         Por radicado
       </p>
     </div>

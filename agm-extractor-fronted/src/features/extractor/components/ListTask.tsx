@@ -141,7 +141,7 @@ export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, 
 
   const sectionHeader = (
     <div className="px-4 pt-3 pb-1.5">
-      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+      <p className="text-[11px] font-semibold text-muted-foreground tracking-wider">
         Por parte procesal
       </p>
     </div>
