@@ -185,21 +185,19 @@ function DetailModal({
           <div className="inline-flex bg-muted rounded-lg p-0.5 gap-0.5">
             <button
               onClick={() => setTabActiva('detalle')}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all cursor-pointer ${
-                tabActiva === 'detalle'
+              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all cursor-pointer ${tabActiva === 'detalle'
                   ? 'bg-background shadow-sm text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               Detalle
             </button>
             <button
               onClick={() => setTabActiva('actuaciones')}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                tabActiva === 'actuaciones'
+              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all flex items-center gap-1.5 cursor-pointer ${tabActiva === 'actuaciones'
                   ? 'bg-background shadow-sm text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               Actuaciones
               {numActuaciones > 0 && (
@@ -548,12 +546,12 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-50 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Radicado</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Tipo proceso</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Demandante</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Última actuación</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Descubierto</TableHead>
-                <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50">Acciones</TableHead>
+                <TableHead className="w-50 text-[11px] font-semibold  tracking-wider text-muted-foreground bg-muted/50">Radicado</TableHead>
+                <TableHead className="text-[11px] font-semibold  tracking-wider text-muted-foreground bg-muted/50">Tipo proceso</TableHead>
+                <TableHead className="text-[11px] font-semibold  tracking-wider text-muted-foreground bg-muted/50">Demandante</TableHead>
+                <TableHead className="text-[11px] font-semibold  tracking-wider text-muted-foreground bg-muted/50">Última actuación</TableHead>
+                <TableHead className="text-[11px] font-semibold  tracking-wider text-muted-foreground bg-muted/50">Descubierto</TableHead>
+                <TableHead className="text-right text-[11px] font-semibold tracking-wider text-muted-foreground bg-muted/50">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -574,11 +572,11 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
                     </span>
                   </TableCell>
                   <TableCell className="max-w-37.5 truncate">
-                    <Badge variant="outline" className="font-normal text-muted-foreground text-xs">
+                    <Badge variant="outline" className="font-normal text-muted-foreground text-xs lowercase">
                       {proceso.tipoProceso}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-[13px] font-medium text-foreground">
+                  <TableCell className="text-[13px] font-medium text-foreground lowercase">
                     {proceso.demandante}
                   </TableCell>
                   <TableCell className="max-w-50 text-[13px] text-foreground">
@@ -589,7 +587,7 @@ export default function TablaResultados({ userId, taskId, radicadoTaskId, taskHa
                             {new Date(proceso.ultimaActuacionFecha).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </span>
                         )}
-                        <span className="line-clamp-2 leading-snug">{proceso.ultimaActuacion}</span>
+                        <span className="line-clamp-2 leading-snug">{proceso.ultimaActuacion.toLowerCase()}</span>
                       </span>
                     ) : (
                       <span className="text-muted-foreground">N/A</span>

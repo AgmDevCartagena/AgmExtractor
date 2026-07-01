@@ -23,7 +23,7 @@ const fmtMs = (ms: number | null) => {
 };
 
 const ESTADOS: Record<string, string> = {
-    RUNNING: 'Corriendo',
+    RUNNING: 'Ejecutando',
     SUCCESS: 'Completado',
     FAILED: 'Fallido',
 };
@@ -146,7 +146,7 @@ function Summary({ label, value }: { label: string; value: string | number }) {
     return (
         <Card>
             <CardContent className="p-4">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+                <p className="text-[13px] normal-case tracking-wide text-muted-foreground font-medium">{label}</p>
                 <p className="text-lg font-semibold text-foreground">{value}</p>
             </CardContent>
         </Card>
