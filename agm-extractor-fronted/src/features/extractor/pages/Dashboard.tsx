@@ -2,137 +2,266 @@ import { signOut, useSession } from '@/lib/auth-client';
 import FormularioExtraccion from '../components/FormExtract';
 import TablaResultados from '../components/TableResult';
 import ListaTareas from '../components/ListTask';
-import { useState } from 'react';
+import ListaTareasRadicado from '../components/ListaTareasRadicado';
+import type { ScheduledTask } from '../hooks/useTask';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, Scale, Plus, X } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { LogOut, Radar, Plus, X, ShieldCheck, LayoutDashboard, List } from 'lucide-react';
+
+type ActiveMode = 'task' | 'radicado';
 
 export default function Dashboard() {
-    const { data: session } = useSession();
-    const userId = session?.user?.id ?? null;
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? null;
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'admin';
+  const navigate = useNavigate();
 
-    const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedRadicadoTaskId, setSelectedRadicadoTaskId] = useState<string | null>(null);
+  const [selectedTaskHasRun, setSelectedTaskHasRun] = useState(false);
+  const [activeMode, setActiveMode] = useState<ActiveMode>('task');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
 
-    const handleCerrarSesion = async () => {
-        await signOut();
-        window.location.reload();
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
     };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalOpen]);
 
-    return (
-        <div className="min-h-screen bg-[#f8fafc] flex flex-col">
-            {/* Header */}
-            <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30">
-                <div className="max-w-[1600px] mx-auto px-6 h-16 flex justify-between items-center w-full">
-                    <div className="flex items-center gap-4">
-                        <div className="p-1.5 bg-blue-600 rounded-lg">
-                            <Scale size={18} className="text-white" />
-                        </div>
-                        <h1 className="text-lg font-bold text-slate-900">RADAR</h1>
-                        <div className="hidden lg:block border-l border-slate-200 h-6 mx-2"></div>
-                    </div>
+  useEffect(() => {
+    if (!editingTask) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setEditingTask(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingTask]);
 
-                    <div className="flex items-center gap-4">
-                        {/* User Profile */}
-                        <div className="flex items-center gap-3">
-                            <div className="hidden sm:block text-right">
-                                <p className="text-sm font-semibold text-slate-800 leading-tight">{session?.user?.name || 'Usuario'}</p>
-                                <p className="text-xs text-slate-500">{session?.user?.email}</p>
-                            </div>
-                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200">
-                                {session?.user?.name?.[0] || 'U'}
-                            </div>
-                        </div>
+  const handleSelectTask = (id: string | null, hasRun?: boolean) => {
+    setSelectedTaskId(id);
+    setSelectedRadicadoTaskId(null);
+    setSelectedTaskHasRun(hasRun ?? false);
+    setActiveMode('task');
+  };
 
-                        <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
+  const handleSelectRadicadoTask = (id: string | null, hasRun?: boolean) => {
+    setSelectedRadicadoTaskId(id);
+    setSelectedTaskId(null);
+    setSelectedTaskHasRun(hasRun ?? false);
+    setActiveMode('radicado');
+  };
 
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleCerrarSesion}
-                            className="gap-2 text-slate-600 border-slate-200 hover:text-red-600 hover:border-red-100 hover:bg-red-50"
-                        >
-                            <LogOut size={16} />
-                            <span className="hidden sm:inline">Cerrar Sesión</span>
-                        </Button>
-                    </div>
-                </div>
-            </header>
+  const haySeleccion = selectedTaskId !== null || selectedRadicadoTaskId !== null;
 
-            {/* Main Content */}
-            <main className="flex-1 p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+  const handleDeseleccionar = () => {
+    setSelectedTaskId(null);
+    setSelectedRadicadoTaskId(null);
+    setSelectedTaskHasRun(false);
+    setActiveMode('task');
+  };
 
-                    {/* Control Center (Left) */}
-                    <div className="lg:col-span-4 lg:sticky lg:top-24 mb-6 lg:mb-0 space-y-6">
-                        <Button
-                            onClick={() => setIsModalOpen(true)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 gap-2 h-12 rounded-xl text-base"
-                        >
-                            <Plus size={20} />
-                            Nuevo Radar
-                        </Button>
+  const handleCerrarSesion = async () => {
+    await signOut();
+    window.location.reload();
+  };
 
-                        {/* Active Radars List - NOW ON TOP */}
-                        <ListaTareas
-                            userId={userId || undefined}
-                            tareaSeleccionada={selectedTaskId}
-                            onSelectTarea={setSelectedTaskId}
-                        />
-                    </div>
+  const abrirModal = () => setIsModalOpen(true);
 
-                    {/* Results Area (Right) */}
-                    <div className="lg:col-span-8 space-y-6">
-                        {/* Status Banner */}
-                        {currentJobId && (
-                            <div className="bg-blue-600 text-white p-5 rounded-2xl shadow-lg shadow-blue-500/20 flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500">
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-white/20 p-2.5 rounded-xl animate-pulse">
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-sm">Extracción en curso</p>
-                                        <p className="text-blue-100 text-[11px] font-mono">ID: {currentJobId}</p>
-                                    </div>
-                                </div>
-                                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 font-bold text-xs uppercase tracking-wider">
-                                    Monitorear
-                                </Button>
-                            </div>
-                        )}
+  return (
+    <div className="min-h-dvh bg-background flex flex-col">
+      <header className="bg-card/80 backdrop-blur-md border-b sticky top-0 z-30">
+        <div className="max-w-400 mx-auto px-6 h-14 flex justify-between items-center w-full">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-primary rounded-md ring-1 ring-primary/30 shadow-sm">
+              <Radar size={15} className="text-primary-foreground" />
+            </div>
+            <h1 className="text-sm font-semibold text-foreground tracking-tight">RADAR</h1>
+          </div>
 
-                        {/* Main Table */}
-                        <div className="min-h-[600px]">
-                            <TablaResultados userId={userId || undefined} taskId={selectedTaskId} />
-                        </div>
-                    </div>
-                </div>
-            </main>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="hidden sm:block text-right">
+                <p className="text-[13px] font-medium text-foreground leading-tight">{session?.user?.name || 'Usuario'}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">{session?.user?.email}</p>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold border border-primary/20">
+                {session?.user?.name?.[0] || 'U'}
+              </div>
+            </div>
 
-            {/* Modal de Nueva Extracción */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h3 className="font-bold text-slate-800">Configurar Nuevo Radar</h3>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setIsModalOpen(false)}
-                                className="rounded-full hover:bg-slate-200"
-                            >
-                                <X size={18} className="text-slate-500" />
-                            </Button>
-                        </div>
-                        <div className="p-1">
-                            <FormularioExtraccion onJobCreated={(id) => {
-                                if (id) setCurrentJobId(id);
-                                setIsModalOpen(false);
-                            }} />
-                        </div>
-                    </div>
-                </div>
+            <div className="w-px h-5 bg-border hidden sm:block" />
+
+            <ThemeToggle />
+
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/admin')}
+                className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer"
+              >
+                <LayoutDashboard size={14} />
+                <span className="hidden sm:inline">Admin</span>
+              </Button>
             )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/cuenta/seguridad')}
+              className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer"
+            >
+              <ShieldCheck size={14} />
+              <span className="hidden sm:inline">Seguridad</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCerrarSesion}
+              className="gap-2 h-8 text-[13px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 cursor-pointer"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Cerrar sesion</span>
+            </Button>
+          </div>
         </div>
-    );
+      </header>
+
+      <main className="flex-1 p-6 lg:p-8 max-w-400 mx-auto w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-4 xl:col-span-3 lg:sticky lg:top-20 mb-6 lg:mb-0">
+            <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground tracking-tight">Radares</h2>
+                <div className="flex items-center gap-1.5">
+                  {haySeleccion && (
+                    <Button
+                      onClick={handleDeseleccionar}
+                      variant="ghost"
+                      size="sm"
+                      title="Ver resultados de todos los radares"
+                      className="h-8 gap-1.5 text-[13px] text-muted-foreground hover:text-primary hover:bg-primary/5 cursor-pointer"
+                    >
+                      <List size={14} />
+                      Ver todos
+                    </Button>
+                  )}
+                  <Button onClick={abrirModal} size="sm" className="h-8 gap-1.5 text-[13px] font-medium cursor-pointer">
+                    <Plus size={14} />
+                    Nuevo
+                  </Button>
+                </div>
+              </div>
+
+              <ListaTareas
+                userId={userId || undefined}
+                tareaSeleccionada={activeMode === 'task' ? selectedTaskId : null}
+                onSelectTarea={handleSelectTask}
+                onNuevoRadar={abrirModal}
+                onEditTarea={setEditingTask}
+              />
+
+              <ListaTareasRadicado
+                userId={userId || undefined}
+                tareaSeleccionada={activeMode === 'radicado' ? selectedRadicadoTaskId : null}
+                onSelectTarea={handleSelectRadicadoTask}
+              />
+            </div>
+          </div>
+
+          <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+            {currentJobId && (
+              <div className="bg-primary/5 border border-primary/20 text-primary px-4 py-2.5 rounded-lg flex items-center gap-3 animate-in">
+                <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                <p className="text-[13px] font-medium">
+                  Extraccion en curso
+                  <span className="text-primary/60 font-mono text-xs ml-2">ID: {currentJobId}</span>
+                </p>
+              </div>
+            )}
+
+            <div className="min-h-150">
+              <TablaResultados
+                userId={userId || undefined}
+                taskId={activeMode === 'task' ? selectedTaskId : null}
+                radicadoTaskId={activeMode === 'radicado' ? selectedRadicadoTaskId : null}
+                taskHasRun={selectedTaskHasRun}
+                onNuevoRadar={abrirModal}
+              />
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-lg bg-card rounded-xl shadow-2xl overflow-hidden animate-modal-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground tracking-tight">Nuevo Radar</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Configura los parametros de la busqueda automatica.</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-full h-8 w-8 shrink-0 cursor-pointer"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+            <FormularioExtraccion onJobCreated={(id) => {
+              if (id) setCurrentJobId(id);
+              setIsModalOpen(false);
+            }} />
+          </div>
+        </div>
+      )}
+
+      {editingTask && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+          onClick={() => setEditingTask(null)}
+        >
+          <div
+            className="relative w-full max-w-lg bg-card rounded-xl shadow-2xl overflow-hidden animate-modal-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground tracking-tight">Editar Radar</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Modifica los parametros de la busqueda automatica.</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingTask(null)}
+                className="rounded-full h-8 w-8 shrink-0 cursor-pointer"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+            <FormularioExtraccion
+              initialTask={editingTask}
+              onJobUpdated={() => setEditingTask(null)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -12,24 +12,50 @@ datasource db {
 }
 
 model User {
-  id            String  @id @default(uuid())
-  email         String  @unique
-  nombre        String
-  contraseña   String?
-  emailVerified Boolean @default(false)
-  image         String?
-  estado        Boolean @default(true)
-  telefono      String?
+  id               String  @id @default(uuid())
+  email            String  @unique
+  nombre           String
+  contraseña      String?
+  emailVerified    Boolean @default(false)
+  image            String?
+  estado           Boolean @default(true)
+  telefono         String?
+  empresa          String?
+  mustChangePassword Boolean @default(false)
+  username         String? @unique
+  displayUsername  String?
+  twoFactorEnabled Boolean @default(false)
 
-  tareas   TareaProgramada[]
-  accounts Account[]
-  sessions Session[]
+  // Campos del plugin admin de better-auth
+  role       String?   @default("user")
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
+
+  tareas         TareaProgramada[]
+  tareasRadicado TareaProgramadaRadicado[]
+  accounts       Account[]
+  sessions       Session[]
+  twofactors     TwoFactor[]
+  auditLogs      AuditLog[]                @relation("AuditActor")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@map("users")
+}
+
+model TwoFactor {
+  id          String  @id @default(uuid())
+  secret      String
+  backupCodes String
+  verified    Boolean @default(false)
+  userId      String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("two_factors")
 }
 
 model Account {
@@ -53,14 +79,15 @@ model Account {
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  userId         String
+  token          String   @unique
+  expiresAt      DateTime
+  ipAddress      String?
+  userAgent      String?
+  impersonatedBy String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -79,20 +106,21 @@ model Verification {
 }
 
 model TareaProgramada {
-  id            String  @id @default(uuid())
+  id            String   @id @default(uuid())
   parteProcesal String[]
   juzgado       String
   frecuencia    String
-  activa        Boolean @default(true)
+  activa        Boolean  @default(true)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   procesos ProcesosJudiciales[]
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  ultimaEjecucion DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
   @@map("tareas_programadas")
 }
@@ -107,12 +135,112 @@ model ProcesosJudiciales {
   textoCompleto       String?
   fechaDescubrimiento DateTime @default(now())
 
-  tareaProgramadaId String
-  tareaProgramada   TareaProgramada @relation(fields: [tareaProgramadaId], references: [id], onDelete: Cascade)
+  // DETALLES 
+
+  corporacion       String?
+  clase             String?
+  subclase          String?
+  marcoLegal        String?
+  vigente           Boolean?
+  salaConoce        String?
+  salaDecide        String?
+  fechaRadicado     DateTime?
+  fechaPresentacion DateTime?
+  sentencia         String?
+  asunto            String?
+  origen            String?
+  recurso           String?
+  naturaleza        String?
+  ubicacion         String?
+  etapa             String?
+  formatoExpediente String?
+  detalleExtraido   Boolean   @default(false)
+
+  tareaProgramadaId String?
+  tareaProgramada   TareaProgramada? @relation(fields: [tareaProgramadaId], references: [id], onDelete: SetNull)
+
+  tareaProgramadaRadicadoId String?
+  tareaProgramadaRadicado   TareaProgramadaRadicado? @relation(fields: [tareaProgramadaRadicadoId], references: [id], onDelete: SetNull)
+
+  actuaciones Actuacion[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@map("procesos_judiciales")
+}
+
+model Actuacion {
+  id             String    @id @default(uuid())
+  fechaRegistro  DateTime?
+  fechaActuacion DateTime?
+  actuacion      String?
+  anotacion      String?
+  estado         String?
+  anexos         Int       @default(0)
+  indice         String?
+
+  procesoId String
+  proceso   ProcesosJudiciales @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([procesoId, indice])
+  @@map("actuaciones")
+}
+
+model TareaProgramadaRadicado {
+  id         String  @id @default(uuid())
+  radicado   String
+  juzgado    String
+  frecuencia String
+  activa     Boolean @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  procesos ProcesosJudiciales[]
+
+  ultimaEjecucion DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([userId, radicado])
+  @@map("tareas_programadas_radicado")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  accion       String // LOGIN, LOGOUT, USER_BANNED, ROLE_CHANGED, USER_DELETED, USER_ESTADO...
+  usuarioId    String? // quién la ejecutó (null = sistema)
+  targetUserId String? // usuario afectado (acciones admin)
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  usuario User? @relation("AuditActor", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([accion])
+  @@map("audit_logs")
+}
+
+model ExecutionLog {
+  id                  String    @id @default(uuid())
+  tipo                String // 'programada' | 'radicado'
+  refId               String // id de la TareaProgramada / Radicado
+  userId              String?
+  status              String // 'RUNNING' | 'SUCCESS' | 'FAILED'
+  startedAt           DateTime  @default(now())
+  finishedAt          DateTime?
+  durationMs          Int?
+  procesosEncontrados Int       @default(0)
+  error               String?
+
+  @@index([startedAt])
+  @@index([status])
+  @@map("execution_logs")
 }

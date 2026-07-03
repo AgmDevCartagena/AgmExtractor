@@ -1,194 +1,246 @@
 import { useState } from 'react';
 import { useTareasProgramadas, useCancelarTarea } from '../hooks/useTask';
-import { Radar, Clock, ChevronRight, Activity, FilterX, AlertCircle, PlusCircle, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Radar, ChevronLeft, ChevronRight, AlertCircle, Trash2, Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import type { ScheduledTask } from '../hooks/useTask';
 
 interface ListaTareasProps {
-    userId: string | undefined;
-    tareaSeleccionada: string | null;
-    onSelectTarea: (id: string | null) => void;
+  userId: string | undefined;
+  tareaSeleccionada: string | null;
+  onSelectTarea: (id: string | null, hasRun?: boolean) => void;
+  onNuevoRadar?: () => void;
+  onEditTarea?: (tarea: ScheduledTask) => void;
 }
 
-export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea }: ListaTareasProps) {
-    const [page, setPage] = useState(1);
-    const limit = 8;
-    const queryClient = useQueryClient();
+function TareaSkeleton() {
+  return (
+    <div className="px-3 py-2.5 animate-pulse space-y-1.5">
+      <div className="h-3.5 bg-muted rounded w-3/4" />
+      <div className="h-3 bg-muted/60 rounded w-1/2" />
+    </div>
+  );
+}
 
-    const { data: response, isLoading, isError } = useTareasProgramadas(userId || null, page, limit);
-    const cancelarMutation = useCancelarTarea();
+function TareaRow({
+  tarea,
+  isSelected,
+  onSelect,
+  onDelete,
+  onEdit,
+}: {
+  tarea: ScheduledTask;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onEdit: (e: React.MouseEvent) => void;
+}) {
+  const partes = Array.isArray(tarea.parteProcesal)
+    ? tarea.parteProcesal.join(', ')
+    : tarea.parteProcesal;
+  const hasRun = tarea.ultimaEjecucion != null;
 
-    const handleEliminarTarea = (e: React.MouseEvent, id: string) => {
-        e.stopPropagation(); // Evitar seleccionar la tarea al hacer clic en eliminar
-        
-        if (window.confirm('¿Estás seguro de que deseas detener y eliminar este radar?')) {
-            const loadingToast = toast.loading('Eliminando radar...');
-            cancelarMutation.mutate(id, {
-                onSuccess: () => {
-                    queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
-                    if (tareaSeleccionada === id) {
-                        onSelectTarea(null);
-                    }
-                    toast.success('Radar eliminado correctamente', { id: loadingToast });
-                },
-                onError: (error) => {
-                    toast.error(error.message || 'Hubo un error al eliminar el radar', { id: loadingToast });
-                }
-            });
+  return (
+    <div
+      onClick={onSelect}
+      className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-md cursor-pointer transition-colors
+        ${isSelected
+          ? 'bg-accent ring-1 ring-primary/20'
+          : 'hover:bg-muted/60'
+        }`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+          hasRun ? 'bg-success' : 'bg-warning animate-pulse-soft'
+        }`}
+        title={hasRun ? 'Radar activo' : 'Pendiente de primera ejecucion'}
+      />
+
+      <div className="flex-1 min-w-0">
+        <p
+          className={`text-[13px] font-medium truncate leading-tight ${isSelected ? 'text-accent-foreground' : 'text-foreground'}`}
+          title={partes}
+        >
+          {partes}
+        </p>
+        <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
+          {tarea.juzgado}
+        </p>
+      </div>
+
+      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide bg-muted px-1.5 py-0.5 rounded shrink-0 group-hover:hidden">
+        {tarea.frecuencia}
+      </span>
+      <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+        <button
+          onClick={onEdit}
+          className="p-1.5 text-muted-foreground/50 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+          title="Editar radar"
+        >
+          <Pencil size={13} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+          title="Eliminar radar"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function ListaTareas({ userId, tareaSeleccionada, onSelectTarea, onNuevoRadar, onEditTarea }: ListaTareasProps) {
+  const [page, setPage] = useState(1);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const limit = 8;
+  const queryClient = useQueryClient();
+
+  const { data: response, isLoading, isError } = useTareasProgramadas(userId || null, page, limit);
+  const cancelarMutation = useCancelarTarea();
+
+  const handleEliminarTarea = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setConfirmId(id);
+  };
+
+  const confirmarEliminacion = () => {
+    if (!confirmId) return;
+    const id = confirmId;
+    setConfirmId(null);
+    const loadingToast = toast.loading('Eliminando radar...');
+    cancelarMutation.mutate(id, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tareasProgramadas'] });
+        if (tareaSeleccionada === id) {
+          onSelectTarea(null);
         }
-    };
+        toast.success('Radar eliminado correctamente', { id: loadingToast });
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Error al eliminar el radar', { id: loadingToast });
+      },
+    });
+  };
 
-    if (!userId) return null;
+  const confirmDialog = (
+    <ConfirmDialog
+      open={confirmId !== null}
+      destructive
+      title="Eliminar radar"
+      description="Se detendra el monitoreo automatico y se eliminara este radar de forma permanente."
+      confirmText="Eliminar"
+      onConfirm={confirmarEliminacion}
+      onCancel={() => setConfirmId(null)}
+    />
+  );
 
-    if (isLoading) {
-        return (
-            <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                    <div key={i} className="bg-white p-4 rounded-xl border border-slate-100 animate-pulse">
-                        <div className="h-4 bg-slate-100 rounded w-3/4 mb-3"></div>
-                        <div className="h-3 bg-slate-50 rounded w-1/2"></div>
-                    </div>
-                ))}
-            </div>
-        );
-    }
+  if (!userId) return null;
 
-    if (isError) {
-        return (
-            <div className="p-6 bg-red-50/50 border border-red-100 rounded-2xl text-center">
-                <AlertCircle className="mx-auto text-red-500 mb-2" size={24} />
-                <p className="text-sm font-medium text-red-800">Error al sincronizar radares</p>
-                <button 
-                    onClick={() => window.location.reload()}
-                    className="mt-2 text-xs text-red-600 underline"
-                >
-                    Reintentar
-                </button>
-            </div>
-        );
-    }
+  const sectionHeader = (
+    <div className="px-4 pt-3 pb-1.5">
+      <p className="text-[11px] font-semibold text-muted-foreground tracking-wider">
+        Por parte procesal
+      </p>
+    </div>
+  );
 
-    const tareas = response?.data || [];
-    const meta = response?.meta;
-
+  if (isLoading) {
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-1">
-                    <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                        <Radar size={16} className="text-blue-600" />
-                        Radares Activos
-                    </h2>
-                    {tareaSeleccionada && (
-                        <button 
-                            onClick={() => onSelectTarea(null)}
-                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
-                        >
-                            <FilterX size={12} />
-                            LIMPIAR
-                        </button>
-                    )}
-                </div>
-                <p className="text-xs text-slate-500">Monitoreo en tiempo real de procesos</p>
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[300px] lg:max-h-[500px] custom-scrollbar">
-                {tareas.length === 0 ? (
-                    <div className="py-12 px-6 text-center">
-                        <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-dashed border-slate-200">
-                            <PlusCircle size={20} className="text-slate-300" />
-                        </div>
-                        <p className="text-sm font-medium text-slate-600 mb-1">Sin radares activos</p>
-                        <p className="text-xs text-slate-400">Configura tu primera búsqueda para comenzar el monitoreo.</p>
-                    </div>
-                ) : (
-                    tareas.map((tarea) => (
-                        <div
-                            key={tarea.id}
-                            onClick={() => onSelectTarea(tarea.id)}
-                            className={`group relative p-4 rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden
-                                ${tareaSeleccionada === tarea.id
-                                    ? 'bg-blue-50 border-blue-200 shadow-sm ring-1 ring-blue-100'
-                                    : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-md hover:bg-slate-50/50'
-                                }`}
-                        >
-                            <div className={`absolute top-0 left-0 w-1 h-full transition-all duration-300
-                                ${tareaSeleccionada === tarea.id ? 'bg-blue-600' : 'bg-transparent group-hover:bg-blue-300'}`} 
-                            />
-
-                            <div className="flex justify-between items-start gap-3">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="font-bold text-slate-800 text-[13px] truncate uppercase tracking-tight" title={Array.isArray(tarea.parteProcesal) ? tarea.parteProcesal.join(', ') : tarea.parteProcesal}>
-                                            {Array.isArray(tarea.parteProcesal) ? tarea.parteProcesal.join(', ') : tarea.parteProcesal}
-                                        </h4>
-                                        {tareaSeleccionada === tarea.id && (
-                                            <Activity size={12} className="text-blue-600 animate-pulse shrink-0" />
-                                        )}
-                                    </div>
-                                    <p className="text-[11px] text-slate-500 truncate leading-relaxed">
-                                        {tarea.juzgado}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                        onClick={(e) => handleEliminarTarea(e, tarea.id)}
-                                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                        title="Eliminar Radar"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                    <ChevronRight 
-                                        size={14} 
-                                        className={`transition-transform duration-300 ${tareaSeleccionada === tarea.id ? 'text-blue-600 translate-x-1' : 'text-slate-300 group-hover:text-slate-400'}`} 
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-3 pt-3 border-t border-slate-100/60 flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                    <Clock size={10} className="text-slate-400" />
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                        {tarea.frecuencia}
-                                    </span>
-                                </div>
-                                <span className="text-[10px] text-slate-400 font-medium">
-                                    {new Date(tarea.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
-                                </span>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-
-            {meta && meta.last_page > 1 && (
-                <div className="p-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); setPage(p => Math.max(1, p - 1)); }}
-                        disabled={page === 1}
-                        className="h-8 px-2 text-[11px] font-bold text-slate-600 hover:bg-white"
-                    >
-                        ANT.
-                    </Button>
-                    <span className="text-[10px] font-bold text-slate-400">
-                        {meta.page} / {meta.last_page}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); setPage(p => Math.min(meta.last_page, p + 1)); }}
-                        disabled={page === meta.last_page}
-                        className="h-8 px-2 text-[11px] font-bold text-slate-600 hover:bg-white"
-                    >
-                        SIG.
-                    </Button>
-                </div>
-            )}
+      <div>
+        {sectionHeader}
+        <div className="px-1 pb-2">
+          <TareaSkeleton />
+          <TareaSkeleton />
+          <TareaSkeleton />
         </div>
+      </div>
     );
+  }
+
+  if (isError) {
+    return (
+      <div>
+        {sectionHeader}
+        <div className="px-4 py-6 text-center">
+          <AlertCircle className="mx-auto text-destructive mb-2" size={20} />
+          <p className="text-[13px] font-medium text-destructive">Error al sincronizar radares</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-1.5 text-xs text-destructive underline underline-offset-2"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const tareas = response?.data || [];
+  const meta = response?.meta;
+
+  if (tareas.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
+          <Radar size={18} className="text-muted-foreground/60" />
+        </div>
+        <p className="text-[13px] font-medium text-foreground mb-1">Sin radares activos</p>
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-55 mx-auto">
+          Crea tu primer radar para comenzar el monitoreo automatico de procesos.
+        </p>
+        {onNuevoRadar && (
+          <button
+            onClick={onNuevoRadar}
+            className="mt-3 text-[13px] font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer"
+          >
+            Crear mi primer radar
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {sectionHeader}
+      <div className="px-1.5 pb-2 space-y-0.5 max-h-100 overflow-y-auto custom-scrollbar">
+        {tareas.map((tarea) => (
+          <TareaRow
+            key={tarea.id}
+            tarea={tarea}
+            isSelected={tareaSeleccionada === tarea.id}
+            onSelect={() => onSelectTarea(tarea.id, tarea.ultimaEjecucion != null)}
+            onDelete={(e) => handleEliminarTarea(e, tarea.id)}
+            onEdit={(e) => { e.stopPropagation(); onEditTarea?.(tarea); }}
+          />
+        ))}
+      </div>
+
+      {meta && meta.last_page > 1 && (
+        <div className="px-3 py-2 border-t flex items-center justify-between">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {meta.page} / {meta.last_page}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(meta.last_page, p + 1))}
+            disabled={page === meta.last_page}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
+      {confirmDialog}
+    </div>
+  );
 }
