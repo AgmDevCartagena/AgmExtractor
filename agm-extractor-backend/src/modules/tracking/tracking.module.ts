@@ -5,8 +5,8 @@ import { ExecutionLogService } from './execution-log.service';
 
 @Global()
 @Module({
-    imports: [PrismaModule],
-    providers: [AuditService, ExecutionLogService],
-    exports: [AuditService, ExecutionLogService],
+  imports: [PrismaModule],
+  providers: [AuditService, ExecutionLogService],
+  exports: [AuditService, ExecutionLogService],
 })
 export class TrackingModule {}

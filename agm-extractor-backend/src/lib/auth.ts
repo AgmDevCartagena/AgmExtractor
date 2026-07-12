@@ -13,58 +13,55 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 export const auth = betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL,
-    secret: process.env.BETTER_AUTH_SECRET,
-    trustedOrigins: [
-        process.env.ALLOW_ORIGIN as string,
-    ],
+  baseURL: process.env.BETTER_AUTH_URL,
+  secret: process.env.BETTER_AUTH_SECRET,
+  trustedOrigins: [process.env.ALLOW_ORIGIN as string],
 
-    database: prismaAdapter(prisma, {
-        provider: 'postgresql',
-    }),
-    session: {
-        expiresIn: 60 * 30,
-        updateAge: 60 * 15,
+  database: prismaAdapter(prisma, {
+    provider: 'postgresql',
+  }),
+  session: {
+    expiresIn: 60 * 30,
+    updateAge: 60 * 15,
+  },
+
+  user: {
+    fields: {
+      name: 'nombre',
     },
-
-    user: {
-
-        fields: {
-            name: 'nombre',
-        },
-        additionalFields: {
-            estado: {
-                type: 'boolean',
-                required: false,
-                defaultValue: true,
-            },
-            telefono: {
-                type: 'string',
-                required: true,
-            },
-            empresa: {
-                type: 'string',
-                required: false,
-            },
-            // El admin lo asigna; el cliente no puede enviarlo (input: false).
-            mustChangePassword: {
-                type: 'boolean',
-                required: false,
-                defaultValue: false,
-                input: false,
-            },
-        },
+    additionalFields: {
+      estado: {
+        type: 'boolean',
+        required: false,
+        defaultValue: true,
+      },
+      telefono: {
+        type: 'string',
+        required: true,
+      },
+      empresa: {
+        type: 'string',
+        required: false,
+      },
+      // El admin lo asigna; el cliente no puede enviarlo (input: false).
+      mustChangePassword: {
+        type: 'boolean',
+        required: false,
+        defaultValue: false,
+        input: false,
+      },
     },
+  },
 
-    emailAndPassword: {
-        enabled: true,
-        minPasswordLength: 8,
-        sendResetPassword: async ({ user, token }) => {
-            const resetLink = `${process.env.ALLOW_ORIGIN}/reset-password?token=${token}`;
-            await sendEmail({
-                to: user.email,
-                subject: 'Restablecer tu contraseña - RADAR',
-                html: `
+  emailAndPassword: {
+    enabled: true,
+    minPasswordLength: 8,
+    sendResetPassword: async ({ user, token }) => {
+      const resetLink = `${process.env.ALLOW_ORIGIN}/reset-password?token=${token}`;
+      await sendEmail({
+        to: user.email,
+        subject: 'Restablecer tu contraseña - RADAR',
+        html: `
                     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; padding: 40px 20px; color: #1e293b;">
                         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
                             <!-- Header -->
@@ -108,146 +105,146 @@ export const auth = betterAuth({
                         </div>
                     </div>
                 `,
+      });
+    },
+  },
+
+  plugins: [
+    username(),
+    twoFactor({ issuer: 'RADAR' }),
+    admin({
+      adminUserIds: (process.env.ADMIN_USER_IDS ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    }),
+  ],
+
+  hooks: {
+    // Bloqueo de login para usuarios desactivados (estado === false).
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === '/sign-in/email' || ctx.path === '/sign-in/username') {
+        const email = ctx.body?.email as string | undefined;
+        const uname = ctx.body?.username as string | undefined;
+        if (!email && !uname) return;
+
+        const usuario = await prisma.user.findFirst({
+          where: email ? { email } : { username: uname },
+          select: { estado: true },
+        });
+
+        if (usuario && usuario.estado === false) {
+          throw new APIError('FORBIDDEN', {
+            message: 'Tu cuenta está desactivada. Contacta al administrador.',
+          });
+        }
+      }
+    }),
+
+    // Auditoría: login, logout y acciones del plugin admin.
+    after: createAuthMiddleware(async (ctx) => {
+      try {
+        const headers = ctx.headers;
+        const userAgent = headers?.get('user-agent') ?? null;
+        const ipAddress =
+          headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+          headers?.get('x-real-ip') ??
+          null;
+
+        const loginPaths = [
+          '/sign-in/email',
+          '/sign-in/username',
+          '/two-factor/verify-totp',
+          '/two-factor/verify-backup-code',
+        ];
+
+        // LOGIN
+        if (loginPaths.includes(ctx.path) && ctx.context.newSession) {
+          await prisma.auditLog.create({
+            data: {
+              accion: 'LOGIN',
+              usuarioId: ctx.context.newSession.user.id,
+              ipAddress,
+              userAgent,
+            },
+          });
+          return;
+        }
+
+        // LOGOUT
+        if (ctx.path === '/sign-out') {
+          await prisma.auditLog.create({
+            data: {
+              accion: 'LOGOUT',
+              usuarioId: ctx.context.session?.user?.id ?? null,
+              ipAddress,
+              userAgent,
+            },
+          });
+          return;
+        }
+
+        // Cambio de contraseña: limpiar el flag de contraseña temporal.
+        if (ctx.path === '/change-password') {
+          const userId = ctx.context.session?.user?.id ?? null;
+          if (userId) {
+            await prisma.user.update({
+              where: { id: userId },
+              data: { mustChangePassword: false },
             });
-        },
-    },
+            await prisma.auditLog.create({
+              data: {
+                accion: 'PASSWORD_CHANGED',
+                usuarioId: userId,
+                ipAddress,
+                userAgent,
+              },
+            });
+          }
+          return;
+        }
 
-    plugins: [
-        username(),
-        twoFactor({ issuer: 'RADAR' }),
-        admin({
-            adminUserIds: (process.env.ADMIN_USER_IDS ?? '')
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean),
-        }),
-    ],
+        // Acciones del plugin admin (/admin/ban-user, /admin/set-role, ...)
+        if (ctx.path.startsWith('/admin/')) {
+          const accionMap: Record<string, string> = {
+            '/admin/ban-user': 'USER_BANNED',
+            '/admin/unban-user': 'USER_UNBANNED',
+            '/admin/set-role': 'ROLE_CHANGED',
+            '/admin/remove-user': 'USER_DELETED',
+            '/admin/set-user-password': 'PASSWORD_RESET',
+            '/admin/create-user': 'USER_CREATED',
+          };
+          const accion = accionMap[ctx.path];
+          if (!accion) return; // ignorar list-users y similares
 
-    hooks: {
-        // Bloqueo de login para usuarios desactivados (estado === false).
-        before: createAuthMiddleware(async (ctx) => {
-            if (ctx.path === '/sign-in/email' || ctx.path === '/sign-in/username') {
-                const email = ctx.body?.email as string | undefined;
-                const uname = ctx.body?.username as string | undefined;
-                if (!email && !uname) return;
+          await prisma.auditLog.create({
+            data: {
+              accion,
+              usuarioId: ctx.context.session?.user?.id ?? null,
+              targetUserId: (ctx.body?.userId as string | undefined) ?? null,
+              ipAddress,
+              userAgent,
+              metadata: {
+                role: ctx.body?.role ?? undefined,
+                banReason: ctx.body?.banReason ?? undefined,
+              },
+            },
+          });
 
-                const usuario = await prisma.user.findFirst({
-                    where: email ? { email } : { username: uname },
-                    select: { estado: true },
-                });
-
-                if (usuario && usuario.estado === false) {
-                    throw new APIError('FORBIDDEN', {
-                        message: 'Tu cuenta está desactivada. Contacta al administrador.',
-                    });
-                }
+          // Usuario creado por admin: exigir cambio de contraseña temporal.
+          if (accion === 'USER_CREATED') {
+            const email = ctx.body?.email as string | undefined;
+            if (email) {
+              await prisma.user.updateMany({
+                where: { email },
+                data: { mustChangePassword: true },
+              });
             }
-        }),
-
-        // Auditoría: login, logout y acciones del plugin admin.
-        after: createAuthMiddleware(async (ctx) => {
-            try {
-                const headers = ctx.headers;
-                const userAgent = headers?.get('user-agent') ?? null;
-                const ipAddress =
-                    headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-                    headers?.get('x-real-ip') ??
-                    null;
-
-                const loginPaths = [
-                    '/sign-in/email',
-                    '/sign-in/username',
-                    '/two-factor/verify-totp',
-                    '/two-factor/verify-backup-code',
-                ];
-
-                // LOGIN
-                if (loginPaths.includes(ctx.path) && ctx.context.newSession) {
-                    await prisma.auditLog.create({
-                        data: {
-                            accion: 'LOGIN',
-                            usuarioId: ctx.context.newSession.user.id,
-                            ipAddress,
-                            userAgent,
-                        },
-                    });
-                    return;
-                }
-
-                // LOGOUT
-                if (ctx.path === '/sign-out') {
-                    await prisma.auditLog.create({
-                        data: {
-                            accion: 'LOGOUT',
-                            usuarioId: ctx.context.session?.user?.id ?? null,
-                            ipAddress,
-                            userAgent,
-                        },
-                    });
-                    return;
-                }
-
-                // Cambio de contraseña: limpiar el flag de contraseña temporal.
-                if (ctx.path === '/change-password') {
-                    const userId = ctx.context.session?.user?.id ?? null;
-                    if (userId) {
-                        await prisma.user.update({
-                            where: { id: userId },
-                            data: { mustChangePassword: false },
-                        });
-                        await prisma.auditLog.create({
-                            data: {
-                                accion: 'PASSWORD_CHANGED',
-                                usuarioId: userId,
-                                ipAddress,
-                                userAgent,
-                            },
-                        });
-                    }
-                    return;
-                }
-
-                // Acciones del plugin admin (/admin/ban-user, /admin/set-role, ...)
-                if (ctx.path.startsWith('/admin/')) {
-                    const accionMap: Record<string, string> = {
-                        '/admin/ban-user': 'USER_BANNED',
-                        '/admin/unban-user': 'USER_UNBANNED',
-                        '/admin/set-role': 'ROLE_CHANGED',
-                        '/admin/remove-user': 'USER_DELETED',
-                        '/admin/set-user-password': 'PASSWORD_RESET',
-                        '/admin/create-user': 'USER_CREATED',
-                    };
-                    const accion = accionMap[ctx.path];
-                    if (!accion) return; // ignorar list-users y similares
-
-                    await prisma.auditLog.create({
-                        data: {
-                            accion,
-                            usuarioId: ctx.context.session?.user?.id ?? null,
-                            targetUserId: (ctx.body?.userId as string | undefined) ?? null,
-                            ipAddress,
-                            userAgent,
-                            metadata: {
-                                role: ctx.body?.role ?? undefined,
-                                banReason: ctx.body?.banReason ?? undefined,
-                            },
-                        },
-                    });
-
-                    // Usuario creado por admin: exigir cambio de contraseña temporal.
-                    if (accion === 'USER_CREATED') {
-                        const email = ctx.body?.email as string | undefined;
-                        if (email) {
-                            await prisma.user.updateMany({
-                                where: { email },
-                                data: { mustChangePassword: true },
-                            });
-                        }
-                    }
-                }
-            } catch {
-                // La auditoría nunca debe romper el flujo de autenticación.
-            }
-        }),
-    },
+          }
+        }
+      } catch {
+        // La auditoría nunca debe romper el flujo de autenticación.
+      }
+    }),
+  },
 });

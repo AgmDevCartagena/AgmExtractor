@@ -4,8 +4,8 @@ import { AdminController } from './admin.controller';
 import { AdminMetricsService } from './admin-metrics.service';
 
 @Module({
-    imports: [PrismaModule],
-    controllers: [AdminController],
-    providers: [AdminMetricsService],
+  imports: [PrismaModule],
+  controllers: [AdminController],
+  providers: [AdminMetricsService],
 })
 export class AdminModule {}
