@@ -1,140 +1,148 @@
-import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { SchedulerRegistry } from '@nestjs/schedule';
-import { CronJob } from 'cron';
+import {
+    HttpException,
+    HttpStatus,
+    Injectable,
+    Logger,
+    OnModuleInit,
+} from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { ScheduleParamsDto } from './dto/schedule-params.dto';
 import { ScheduleRadicadoDto } from './dto/schedule-radicado.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { ExtractionQueue } from './extractor.queue';
-import { SamaiScraperService } from './samai-scraper.service';
+import {
+    EXTRACTION_QUEUE,
+    JOB_EXTRACT_PARTE,
+    JOB_EXTRACT_RADICADO,
+    FRECUENCIA_MS,
+} from './extraction-queue.constants';
 
 @Injectable()
 export class ExtractorSchedulerService implements OnModuleInit {
     private readonly logger = new Logger(ExtractorSchedulerService.name);
 
     constructor(
-        private schedulerRegistry: SchedulerRegistry,
+        @InjectQueue(EXTRACTION_QUEUE) private readonly queue: Queue,
         private readonly prisma: PrismaService,
-        private readonly extractionQueue: ExtractionQueue,
-        private readonly scraper: SamaiScraperService,
     ) { }
 
     async onModuleInit() {
         try {
-            const tasks = await this.prisma.tareaProgramada.findMany({
-                where: { activa: true }
-            })
+            const [parteTasks, radicadoTasks, schedulers] = await Promise.all([
+                this.prisma.tareaProgramada.findMany({ where: { activa: true } }),
+                this.prisma.tareaProgramadaRadicado.findMany({
+                    where: { activa: true },
+                }),
+                this.queue.getJobSchedulers(0, -1, true),
+            ]);
 
-            if (tasks.length === 0) {
-                this.logger.log(`No hay tareas programadas (parteProcesal) para restaurar`);
-            } else {
-                for (const task of tasks) {
-                    const cronExpression = this.translateFrecuency(task.frecuencia);
-                    if (!cronExpression) {
-                        this.logger.warn(`Frecuencia no válida para la tarea ${task.id}, omitiendo restauración.`);
-                        continue;
-                    }
+            const existingIds = new Set(schedulers.map((s) => s.id));
+            const expected = new Map<string, () => Promise<unknown>>();
 
-                    const nameJob = task.id;
-
-                    const job = new CronJob(cronExpression, () => {
-                        this.logger.log(`Ejecutando tarea programadas`);
-                        this.extractionQueue.enqueue(task.id, () =>
-                            this.scraper.extractData(task.id, task.parteProcesal, task.juzgado)
-                        ).catch(error => {
-                            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-                            this.logger.error(`Error en tarea programada para el usuario ${task.userId}: ${errorMessage}`);
-                        });
-                    })
-
-                    this.schedulerRegistry.addCronJob(nameJob, job);
-                    job.start();
-                }
-
-                this.logger.log(`Tareas programadas restauradas: ${tasks.length}`);
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al restaurar tareas programadas: ${errorMessage}`);
-        }
-
-        try {
-            const radicadoTasks = await this.prisma.tareaProgramadaRadicado.findMany({
-                where: { activa: true }
-            });
-
-            for (const task of radicadoTasks) {
-                const cronExpression = this.translateFrecuency(task.frecuencia);
-                if (!cronExpression) {
-                    this.logger.warn(`Frecuencia no válida para radicado tarea ${task.id}, omitiendo.`);
+            for (const task of parteTasks) {
+                const everyMs = FRECUENCIA_MS[task.frecuencia];
+                if (!everyMs) {
+                    this.logger.warn(
+                        `Frecuencia no válida para la tarea ${task.id}, omitiendo restauración.`,
+                    );
                     continue;
                 }
-
-                const job = new CronJob(cronExpression, () => {
-                    this.extractionQueue.enqueue(`radicado_${task.id}`, () =>
-                        this.scraper.extractDataByRadicado(task.id, task.radicado, task.juzgado, true)
-                    ).catch(error => {
-                        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-                        this.logger.error(`Error en tarea radicado [${task.id}]: ${errorMessage}`);
-                    });
-                });
-
-                this.schedulerRegistry.addCronJob(`radicado_${task.id}`, job);
-                job.start();
+                expected.set(task.id, () =>
+                    this.queue.upsertJobScheduler(
+                        task.id,
+                        { every: everyMs },
+                        {
+                            name: JOB_EXTRACT_PARTE,
+                            data: {
+                                taskId: task.id,
+                                parteProcesal: task.parteProcesal,
+                                juzgado: task.juzgado,
+                            },
+                        },
+                    ),
+                );
             }
 
-            this.logger.log(`Tareas de radicado restauradas: ${radicadoTasks.length}`);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            this.logger.error(`Error al restaurar tareas de radicado: ${errorMessage}`);
-        }
-    }
+            for (const task of radicadoTasks) {
+                const everyMs = FRECUENCIA_MS[task.frecuencia];
+                if (!everyMs) {
+                    this.logger.warn(
+                        `Frecuencia no válida para radicado tarea ${task.id}, omitiendo.`,
+                    );
+                    continue;
+                }
+                expected.set(`radicado_${task.id}`, () =>
+                    this.queue.upsertJobScheduler(
+                        `radicado_${task.id}`,
+                        { every: everyMs },
+                        {
+                            name: JOB_EXTRACT_RADICADO,
+                            data: {
+                                taskId: task.id,
+                                radicado: task.radicado,
+                                juzgado: task.juzgado,
+                            },
+                        },
+                    ),
+                );
+            }
 
-    private translateFrecuency(frecuency: string): string {
-        const mapaCron: Record<string, string> = {
-            '3min': '*/3 * * * *',
-            '15min': '*/15 * * * *',
-            '30min': '*/30 * * * *',
-            '1h': '0 * * * *',
-            '12h': '0 */12 * * *',
-            '1d': '0 0 * * *',
-            '2d': '0 0 */2 * *',
-            '3d': '0 0 */3 * *',
-        };
-        return mapaCron[frecuency];
+            let created = 0;
+            for (const [id, create] of expected) {
+                if (!existingIds.has(id)) {
+                    await create();
+                    created++;
+                }
+            }
+
+            let removed = 0;
+            for (const s of schedulers) {
+                if (!expected.has(s.id as string)) {
+                    await this.queue.removeJobScheduler(s.id as string);
+                    removed++;
+                }
+            }
+
+            this.logger.log(
+                `Reconciliación de schedulers completa. Creados: ${created}, eliminados (huérfanos): ${removed}, activos: ${expected.size}`,
+            );
+        } catch (error) {
+            const errorMessage =
+                error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(
+                `Error al reconciliar tareas programadas: ${errorMessage}`,
+            );
+        }
     }
 
     async scheduleExtraction(params: ScheduleParamsDto, userId: string) {
         const { frecuencia, parteProcesal: partesProcesales, juzgado } = params;
 
-        const cronExpression = this.translateFrecuency(frecuencia);
-        if (!cronExpression) {
+        const everyMs = FRECUENCIA_MS[frecuencia];
+        if (!everyMs) {
             throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
         }
 
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user) throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
+        if (!user)
+            throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
 
         const newTask = await this.prisma.tareaProgramada.create({
             data: { userId, frecuencia, parteProcesal: partesProcesales, juzgado },
         });
 
-        const job = new CronJob(cronExpression, () => {
-            this.extractionQueue.enqueue(newTask.id, () =>
-                this.scraper.extractData(newTask.id, partesProcesales, juzgado)
-            ).catch(err =>
-                this.logger.error(`Error en tarea [${newTask.id}]: ${err?.message}`)
-            );
-        });
+        await this.queue.upsertJobScheduler(
+            newTask.id,
+            { every: everyMs },
+            {
+                name: JOB_EXTRACT_PARTE,
+                data: { taskId: newTask.id, parteProcesal: partesProcesales, juzgado },
+            },
+        );
 
-        this.schedulerRegistry.addCronJob(newTask.id, job);
-        job.start();
-
-        // Primera corrida inmediata en background
-        this.extractionQueue.enqueue(newTask.id, () =>
-            this.scraper.extractData(newTask.id, partesProcesales, juzgado)
-        ).catch(err => this.logger.error(`Error en primera corrida [${newTask.id}]: ${err?.message}`));
-
-        this.logger.log(`Tarea [${newTask.id}] creada para usuario ${userId} con frecuencia ${frecuencia}`);
+        this.logger.log(
+            `Tarea [${newTask.id}] creada para usuario ${userId} con frecuencia ${frecuencia}`,
+        );
 
         return {
             message: `Tarea programada creada con éxito`,
@@ -143,11 +151,15 @@ export class ExtractorSchedulerService implements OnModuleInit {
         };
     }
 
-    async updateScheduledExtraction(jobId: string, params: ScheduleParamsDto, userId: string) {
+    async updateScheduledExtraction(
+        jobId: string,
+        params: ScheduleParamsDto,
+        userId: string,
+    ) {
         const { frecuencia, parteProcesal: partesProcesales, juzgado } = params;
 
-        const cronExpression = this.translateFrecuency(frecuencia);
-        if (!cronExpression) {
+        const everyMs = FRECUENCIA_MS[frecuencia];
+        if (!everyMs) {
             throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
         }
 
@@ -155,40 +167,37 @@ export class ExtractorSchedulerService implements OnModuleInit {
             where: { id: jobId, userId },
         });
         if (!userTask) {
-            throw new HttpException('Radar no encontrado para este usuario', HttpStatus.NOT_FOUND);
+            throw new HttpException(
+                'Radar no encontrado para este usuario',
+                HttpStatus.NOT_FOUND,
+            );
         }
 
         await this.prisma.tareaProgramada.update({
             where: { id: jobId },
-            data: { frecuencia, parteProcesal: partesProcesales, juzgado, activa: true, deletedAt: null },
+            data: {
+                frecuencia,
+                parteProcesal: partesProcesales,
+                juzgado,
+                activa: true,
+                deletedAt: null,
+            },
         });
 
-        // Recrear el cron job con los nuevos parámetros
-        try {
-            const existingJob = this.schedulerRegistry.getCronJob(jobId);
-            existingJob.stop();
-            this.schedulerRegistry.deleteCronJob(jobId);
-        } catch {
-            this.logger.warn(`No había cron job activo para [${jobId}], se creará uno nuevo.`);
-        }
+        // Recrear el scheduler para forzar corrida inmediata con los nuevos parámetros
+        await this.queue.removeJobScheduler(jobId);
+        await this.queue.upsertJobScheduler(
+            jobId,
+            { every: everyMs },
+            {
+                name: JOB_EXTRACT_PARTE,
+                data: { taskId: jobId, parteProcesal: partesProcesales, juzgado },
+            },
+        );
 
-        const job = new CronJob(cronExpression, () => {
-            this.extractionQueue.enqueue(jobId, () =>
-                this.scraper.extractData(jobId, partesProcesales, juzgado)
-            ).catch(err =>
-                this.logger.error(`Error en tarea [${jobId}]: ${err?.message}`)
-            );
-        });
-
-        this.schedulerRegistry.addCronJob(jobId, job);
-        job.start();
-
-        // Primera corrida inmediata en background con los nuevos parámetros
-        this.extractionQueue.enqueue(jobId, () =>
-            this.scraper.extractData(jobId, partesProcesales, juzgado)
-        ).catch(err => this.logger.error(`Error en corrida inmediata tras edición [${jobId}]: ${err?.message}`));
-
-        this.logger.log(`Tarea [${jobId}] actualizada para usuario ${userId} con frecuencia ${frecuencia}`);
+        this.logger.log(
+            `Tarea [${jobId}] actualizada para usuario ${userId} con frecuencia ${frecuencia}`,
+        );
 
         return {
             message: 'Radar actualizado con éxito',
@@ -204,12 +213,13 @@ export class ExtractorSchedulerService implements OnModuleInit {
             });
 
             if (!userTask) {
-                throw new HttpException('Tarea no encontrada para este usuario', HttpStatus.NOT_FOUND);
+                throw new HttpException(
+                    'Tarea no encontrada para este usuario',
+                    HttpStatus.NOT_FOUND,
+                );
             }
 
-            const job = this.schedulerRegistry.getCronJob(jobId);
-            job.stop();
-            this.schedulerRegistry.deleteCronJob(jobId);
+            await this.queue.removeJobScheduler(jobId);
 
             await this.prisma.tareaProgramada.update({
                 where: { id: jobId },
@@ -218,63 +228,80 @@ export class ExtractorSchedulerService implements OnModuleInit {
 
             this.logger.log(`Tarea [${jobId}] detenida y desactivada.`);
             return { message: 'Tarea cancelada exitosamente' };
-
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Error al detener tarea [${jobId}]: ${msg}`);
-            throw new HttpException(`Error al detener tarea: ${msg}`, HttpStatus.BAD_REQUEST);
+            throw new HttpException(
+                `Error al detener tarea: ${msg}`,
+                HttpStatus.BAD_REQUEST,
+            );
         }
     }
 
-    getQueueStatus() {
-        return this.extractionQueue.getStatus();
+    async getQueueStatus() {
+        const counts = await this.queue.getJobCounts(
+            'active',
+            'waiting',
+            'delayed',
+            'failed',
+            'completed',
+        );
+        return {
+            running: counts.active,
+            queued: counts.waiting,
+            maxConcurrent: parseInt(process.env.EXTRACTION_CONCURRENCY ?? '3', 10),
+            counts,
+        };
     }
 
-    async scheduleRadicadoExtraction(params: ScheduleRadicadoDto, userId: string) {
+    async scheduleRadicadoExtraction(
+        params: ScheduleRadicadoDto,
+        userId: string,
+    ) {
         const { frecuencia, radicado, juzgado } = params;
 
-        const cronExpression = this.translateFrecuency(frecuencia);
-        if (!cronExpression) {
+        const everyMs = FRECUENCIA_MS[frecuencia];
+        if (!everyMs) {
             throw new HttpException('Frecuencia no válida', HttpStatus.BAD_REQUEST);
         }
 
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user) throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
+        if (!user)
+            throw new HttpException('Usuario no encontrado', HttpStatus.NOT_FOUND);
 
         const existente = await this.prisma.tareaProgramadaRadicado.findUnique({
             where: { userId_radicado: { userId, radicado } },
         });
 
         if (existente && existente.activa) {
-            throw new HttpException('Ya existe un radar activo para este radicado', HttpStatus.CONFLICT);
+            throw new HttpException(
+                'Ya existe un radar activo para este radicado',
+                HttpStatus.CONFLICT,
+            );
         }
 
-        const newTask = existente 
+        const newTask = existente
             ? await this.prisma.tareaProgramadaRadicado.update({
-                where: { id: existente.id},
+                where: { id: existente.id },
                 data: { juzgado, frecuencia, activa: true, deletedAt: null },
             })
             : await this.prisma.tareaProgramadaRadicado.create({
                 data: { userId, radicado, juzgado, frecuencia },
             });
 
-        const job = new CronJob(cronExpression, () => {
-            this.extractionQueue.enqueue(`radicado_${newTask.id}`, () =>
-                this.scraper.extractDataByRadicado(newTask.id, radicado, juzgado, true)
-            ).catch(err =>
-                this.logger.error(`Error en tarea radicado [${newTask.id}]: ${err?.message}`)
-            );
-        });
+        await this.queue.removeJobScheduler(`radicado_${newTask.id}`);
+        await this.queue.upsertJobScheduler(
+            `radicado_${newTask.id}`,
+            { every: everyMs },
+            {
+                name: JOB_EXTRACT_RADICADO,
+                data: { taskId: newTask.id, radicado, juzgado },
+            },
+        );
 
-        this.schedulerRegistry.addCronJob(`radicado_${newTask.id}`, job);
-        job.start();
-
-        // Primera corrida inmediata en background
-        this.extractionQueue.enqueue(`radicado_${newTask.id}`, () =>
-            this.scraper.extractDataByRadicado(newTask.id, radicado, juzgado, true)
-        ).catch(err => this.logger.error(`Error en primera corrida radicado [${newTask.id}]: ${err?.message}`));
-
-        this.logger.log(`Tarea radicado [${newTask.id}] creada para usuario ${userId}`);
+        this.logger.log(
+            `Tarea radicado [${newTask.id}] creada para usuario ${userId}`,
+        );
 
         return {
             message: 'Radar de radicado creado exitosamente',
@@ -290,12 +317,13 @@ export class ExtractorSchedulerService implements OnModuleInit {
             });
 
             if (!userTask) {
-                throw new HttpException('Tarea de radicado no encontrada', HttpStatus.NOT_FOUND);
+                throw new HttpException(
+                    'Tarea de radicado no encontrada',
+                    HttpStatus.NOT_FOUND,
+                );
             }
 
-            const job = this.schedulerRegistry.getCronJob(`radicado_${jobId}`);
-            job.stop();
-            this.schedulerRegistry.deleteCronJob(`radicado_${jobId}`);
+            await this.queue.removeJobScheduler(`radicado_${jobId}`);
 
             await this.prisma.tareaProgramadaRadicado.update({
                 where: { id: jobId },
@@ -304,11 +332,13 @@ export class ExtractorSchedulerService implements OnModuleInit {
 
             this.logger.log(`Tarea radicado [${jobId}] detenida y desactivada.`);
             return { message: 'Radar de radicado cancelado exitosamente' };
-
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Error desconocido';
             this.logger.error(`Error al detener tarea radicado [${jobId}]: ${msg}`);
-            throw new HttpException(`Error al detener tarea: ${msg}`, HttpStatus.BAD_REQUEST);
+            throw new HttpException(
+                `Error al detener tarea: ${msg}`,
+                HttpStatus.BAD_REQUEST,
+            );
         }
     }
 }

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ExtractorModule } from './modules/extractor/extractor.module';
-import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { AuthGuard, AuthModule } from '@thallesp/nestjs-better-auth';
 import { auth } from './lib/auth';
@@ -14,17 +14,25 @@ import { AdminModule } from './modules/admin/admin.module';
 @Module({
   imports: [
     ExtractorModule,
-    ScheduleModule.forRoot(),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST ?? 'localhost',
+        port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+      },
+    }),
     AuthModule.forRoot({
-      auth
+      auth,
     }),
     PrismaModule,
     TrackingModule,
     AdminModule,
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 10,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 10,
+      },
+    ]),
     NotificationsModule,
   ],
   controllers: [],
@@ -47,4 +55,4 @@ import { AdminModule } from './modules/admin/admin.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}
